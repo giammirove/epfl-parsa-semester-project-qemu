@@ -11,6 +11,7 @@
 #ifndef QEMU_QEMU_PLUGIN_H
 #define QEMU_QEMU_PLUGIN_H
 
+#include "typedefs.h"
 #include <glib.h>
 #include <inttypes.h>
 #include <stdbool.h>
@@ -23,18 +24,18 @@
  *   https://gcc.gnu.org/wiki/Visibility
  */
 #if defined _WIN32 || defined __CYGWIN__
-  #ifdef CONFIG_PLUGIN
-    #define QEMU_PLUGIN_EXPORT __declspec(dllimport)
-    #define QEMU_PLUGIN_API __declspec(dllexport)
-  #else
-    #define QEMU_PLUGIN_EXPORT __declspec(dllexport)
-    #define QEMU_PLUGIN_API __declspec(dllimport)
-  #endif
-  #define QEMU_PLUGIN_LOCAL
+#ifdef CONFIG_PLUGIN
+#define QEMU_PLUGIN_EXPORT __declspec(dllimport)
+#define QEMU_PLUGIN_API __declspec(dllexport)
 #else
-  #define QEMU_PLUGIN_EXPORT __attribute__((visibility("default")))
-  #define QEMU_PLUGIN_LOCAL  __attribute__((visibility("hidden")))
-  #define QEMU_PLUGIN_API
+#define QEMU_PLUGIN_EXPORT __declspec(dllexport)
+#define QEMU_PLUGIN_API __declspec(dllimport)
+#endif
+#define QEMU_PLUGIN_LOCAL
+#else
+#define QEMU_PLUGIN_EXPORT __attribute__((visibility("default")))
+#define QEMU_PLUGIN_LOCAL __attribute__((visibility("hidden")))
+#define QEMU_PLUGIN_API
 #endif
 
 /**
@@ -72,24 +73,24 @@ extern QEMU_PLUGIN_EXPORT int qemu_plugin_version;
  * architectures or when under full system emulation.
  */
 typedef struct qemu_info_t {
-    /** @target_name: string describing architecture */
-    const char *target_name;
-    /** @version: minimum and current plugin API level */
+  /** @target_name: string describing architecture */
+  const char *target_name;
+  /** @version: minimum and current plugin API level */
+  struct {
+    int min;
+    int cur;
+  } version;
+  /** @system_emulation: is this a full system emulation? */
+  bool system_emulation;
+  union {
+    /** @system: information relevant to system emulation */
     struct {
-        int min;
-        int cur;
-    } version;
-    /** @system_emulation: is this a full system emulation? */
-    bool system_emulation;
-    union {
-        /** @system: information relevant to system emulation */
-        struct {
-            /** @system.smp_vcpus: initial number of vCPUs */
-            int smp_vcpus;
-            /** @system.max_vcpus: maximum possible number of vCPUs */
-            int max_vcpus;
-        } system;
-    };
+      /** @system.smp_vcpus: initial number of vCPUs */
+      int smp_vcpus;
+      /** @system.max_vcpus: maximum possible number of vCPUs */
+      int max_vcpus;
+    } system;
+  };
 } qemu_info_t;
 
 /**
@@ -110,8 +111,8 @@ typedef struct qemu_info_t {
  * Return: 0 on successful loading, !0 for an error.
  */
 QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
-                                           const qemu_info_t *info,
-                                           int argc, char **argv);
+                                           const qemu_info_t *info, int argc,
+                                           char **argv);
 
 /**
  * typedef qemu_plugin_simple_cb_t - simple callback
@@ -128,6 +129,8 @@ typedef void (*qemu_plugin_simple_cb_t)(qemu_plugin_id_t id);
  * was registered.
  */
 typedef void (*qemu_plugin_udata_cb_t)(qemu_plugin_id_t id, void *userdata);
+
+typedef uint64_t (*qemu_plugin_qflex_icount_cb_t)(void);
 
 /**
  * typedef qemu_plugin_vcpu_simple_cb_t - vcpu callback
@@ -201,6 +204,21 @@ void qemu_plugin_register_vcpu_exit_cb(qemu_plugin_id_t id,
                                        qemu_plugin_vcpu_simple_cb_t cb);
 
 /**
+ * qemu_plugin_register_qflex_state_cb() - register a vCPU icount callback
+ * @id: plugin ID
+ * @cb: callback function
+ *
+ * The @cb function is called every time a vCPU needs to get the icount from
+ * the plugin.
+ * Only for qflex purposes
+ *
+ * @giammirove
+ */
+QEMU_PLUGIN_API
+void qemu_plugin_register_qflex_state_cb(qemu_plugin_id_t id,
+                                         QflexPluginState *state);
+
+/**
  * qemu_plugin_register_vcpu_idle_cb() - register a vCPU idle callback
  * @id: plugin ID
  * @cb: callback function
@@ -236,8 +254,8 @@ struct qemu_plugin_scoreboard;
  * located at a specified offset. Inline operations expect this as entry.
  */
 typedef struct {
-    struct qemu_plugin_scoreboard *score;
-    size_t offset;
+  struct qemu_plugin_scoreboard *score;
+  size_t offset;
 } qemu_plugin_u64;
 
 /**
@@ -251,15 +269,15 @@ typedef struct {
  * system register state.
  */
 enum qemu_plugin_cb_flags {
-    QEMU_PLUGIN_CB_NO_REGS,
-    QEMU_PLUGIN_CB_R_REGS,
-    QEMU_PLUGIN_CB_RW_REGS,
+  QEMU_PLUGIN_CB_NO_REGS,
+  QEMU_PLUGIN_CB_R_REGS,
+  QEMU_PLUGIN_CB_RW_REGS,
 };
 
 enum qemu_plugin_mem_rw {
-    QEMU_PLUGIN_MEM_R = 1,
-    QEMU_PLUGIN_MEM_W,
-    QEMU_PLUGIN_MEM_RW,
+  QEMU_PLUGIN_MEM_R = 1,
+  QEMU_PLUGIN_MEM_W,
+  QEMU_PLUGIN_MEM_RW,
 };
 
 /**
@@ -310,7 +328,7 @@ void qemu_plugin_register_vcpu_tb_exec_cb(struct qemu_plugin_tb *tb,
  */
 
 enum qemu_plugin_op {
-    QEMU_PLUGIN_INLINE_ADD_U64,
+  QEMU_PLUGIN_INLINE_ADD_U64,
 };
 
 /**
@@ -324,9 +342,7 @@ enum qemu_plugin_op {
  */
 QEMU_PLUGIN_API
 void qemu_plugin_register_vcpu_tb_exec_inline_per_vcpu(
-    struct qemu_plugin_tb *tb,
-    enum qemu_plugin_op op,
-    qemu_plugin_u64 entry,
+    struct qemu_plugin_tb *tb, enum qemu_plugin_op op, qemu_plugin_u64 entry,
     uint64_t imm);
 
 /**
@@ -343,6 +359,10 @@ void qemu_plugin_register_vcpu_insn_exec_cb(struct qemu_plugin_insn *insn,
                                             qemu_plugin_vcpu_udata_cb_t cb,
                                             enum qemu_plugin_cb_flags flags,
                                             void *userdata);
+QEMU_PLUGIN_API
+void qemu_plugin_register_vcpu_insn_exec_cb_qflex(
+    struct qemu_plugin_insn *insn, qemu_plugin_vcpu_udata_cb_t cb,
+    enum qemu_plugin_cb_flags flags, void *udata, uint64_t (*test_fun)(void));
 
 /**
  * qemu_plugin_register_vcpu_insn_exec_inline_per_vcpu() - insn exec inline op
@@ -355,10 +375,8 @@ void qemu_plugin_register_vcpu_insn_exec_cb(struct qemu_plugin_insn *insn,
  */
 QEMU_PLUGIN_API
 void qemu_plugin_register_vcpu_insn_exec_inline_per_vcpu(
-    struct qemu_plugin_insn *insn,
-    enum qemu_plugin_op op,
-    qemu_plugin_u64 entry,
-    uint64_t imm);
+    struct qemu_plugin_insn *insn, enum qemu_plugin_op op,
+    qemu_plugin_u64 entry, uint64_t imm);
 
 /**
  * qemu_plugin_tb_n_insns() - query helper for number of insns in TB
@@ -535,10 +553,9 @@ const char *qemu_plugin_hwaddr_device_name(const struct qemu_plugin_hwaddr *h);
  * @vaddr: the virtual address of the transaction
  * @userdata: any user data attached to the callback
  */
-typedef void (*qemu_plugin_vcpu_mem_cb_t) (unsigned int vcpu_index,
-                                           qemu_plugin_meminfo_t info,
-                                           uint64_t vaddr,
-                                           void *userdata);
+typedef void (*qemu_plugin_vcpu_mem_cb_t)(unsigned int vcpu_index,
+                                          qemu_plugin_meminfo_t info,
+                                          uint64_t vaddr, void *userdata);
 
 /**
  * qemu_plugin_register_vcpu_mem_cb() - register memory access callback
@@ -580,31 +597,25 @@ void qemu_plugin_register_vcpu_mem_cb(struct qemu_plugin_insn *insn,
  */
 QEMU_PLUGIN_API
 void qemu_plugin_register_vcpu_mem_inline_per_vcpu(
-    struct qemu_plugin_insn *insn,
-    enum qemu_plugin_mem_rw rw,
-    enum qemu_plugin_op op,
-    qemu_plugin_u64 entry,
-    uint64_t imm);
+    struct qemu_plugin_insn *insn, enum qemu_plugin_mem_rw rw,
+    enum qemu_plugin_op op, qemu_plugin_u64 entry, uint64_t imm);
 
-typedef void
-(*qemu_plugin_vcpu_syscall_cb_t)(qemu_plugin_id_t id, unsigned int vcpu_index,
-                                 int64_t num, uint64_t a1, uint64_t a2,
-                                 uint64_t a3, uint64_t a4, uint64_t a5,
-                                 uint64_t a6, uint64_t a7, uint64_t a8);
+typedef void (*qemu_plugin_vcpu_syscall_cb_t)(
+    qemu_plugin_id_t id, unsigned int vcpu_index, int64_t num, uint64_t a1,
+    uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6,
+    uint64_t a7, uint64_t a8);
 
 QEMU_PLUGIN_API
 void qemu_plugin_register_vcpu_syscall_cb(qemu_plugin_id_t id,
                                           qemu_plugin_vcpu_syscall_cb_t cb);
 
-typedef void
-(*qemu_plugin_vcpu_syscall_ret_cb_t)(qemu_plugin_id_t id, unsigned int vcpu_idx,
-                                     int64_t num, int64_t ret);
+typedef void (*qemu_plugin_vcpu_syscall_ret_cb_t)(qemu_plugin_id_t id,
+                                                  unsigned int vcpu_idx,
+                                                  int64_t num, int64_t ret);
 
 QEMU_PLUGIN_API
-void
-qemu_plugin_register_vcpu_syscall_ret_cb(qemu_plugin_id_t id,
-                                         qemu_plugin_vcpu_syscall_ret_cb_t cb);
-
+void qemu_plugin_register_vcpu_syscall_ret_cb(
+    qemu_plugin_id_t id, qemu_plugin_vcpu_syscall_ret_cb_t cb);
 
 /**
  * qemu_plugin_insn_disas() - return disassembly string for instruction
@@ -733,9 +744,9 @@ struct qemu_plugin_register;
  * @feature: optional feature descriptor, can be NULL
  */
 typedef struct {
-    struct qemu_plugin_register *handle;
-    const char *name;
-    const char *feature;
+  struct qemu_plugin_register *handle;
+  const char *name;
+  const char *feature;
 } qemu_plugin_reg_descriptor;
 
 /**
@@ -797,10 +808,10 @@ void *qemu_plugin_scoreboard_find(struct qemu_plugin_scoreboard *score,
                                   unsigned int vcpu_index);
 
 /* Macros to define a qemu_plugin_u64 */
-#define qemu_plugin_scoreboard_u64(score) \
-    (qemu_plugin_u64) {score, 0}
-#define qemu_plugin_scoreboard_u64_in_struct(score, type, member) \
-    (qemu_plugin_u64) {score, offsetof(type, member)}
+#define qemu_plugin_scoreboard_u64(score)                                      \
+  (qemu_plugin_u64) { score, 0 }
+#define qemu_plugin_scoreboard_u64_in_struct(score, type, member)              \
+  (qemu_plugin_u64) { score, offsetof(type, member) }
 
 /**
  * qemu_plugin_u64_add() - add a value to a qemu_plugin_u64 for a given vcpu

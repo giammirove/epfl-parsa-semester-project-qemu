@@ -35,107 +35,133 @@
 #include "sysemu/rtc.h"
 
 typedef struct DumpState {
-    int64_t start_ts;
-    int fd;
-    int pcap_caplen;
+  int64_t start_ts;
+  int fd;
+  int pcap_caplen;
 } DumpState;
 
 #define PCAP_MAGIC 0xa1b2c3d4
 
 struct pcap_file_hdr {
-    uint32_t magic;
-    uint16_t version_major;
-    uint16_t version_minor;
-    int32_t thiszone;
-    uint32_t sigfigs;
-    uint32_t snaplen;
-    uint32_t linktype;
+  uint32_t magic;
+  uint16_t version_major;
+  uint16_t version_minor;
+  int32_t thiszone;
+  uint32_t sigfigs;
+  uint32_t snaplen;
+  uint32_t linktype;
 };
 
 struct pcap_sf_pkthdr {
-    struct {
-        int32_t tv_sec;
-        int32_t tv_usec;
-    } ts;
-    uint32_t caplen;
-    uint32_t len;
+  struct {
+    int32_t tv_sec;
+    int32_t tv_usec;
+  } ts;
+  uint32_t caplen;
+  uint32_t len;
 };
 
 static ssize_t dump_receive_iov(DumpState *s, const struct iovec *iov, int cnt,
                                 int offset)
 {
-    struct pcap_sf_pkthdr hdr;
-    int64_t ts;
-    int caplen;
-    size_t size = iov_size(iov, cnt) - offset;
-    g_autofree struct iovec *dumpiov = g_new(struct iovec, cnt + 1);
+  struct pcap_sf_pkthdr hdr;
+  int64_t ts;
+  int caplen;
+  size_t size = iov_size(iov, cnt) - offset;
+  g_autofree struct iovec *dumpiov = g_new(struct iovec, cnt + 1);
 
-    /* Early return in case of previous error. */
-    if (s->fd < 0) {
-        return size;
-    }
-
-    ts = qemu_clock_get_us(QEMU_CLOCK_VIRTUAL);
-    caplen = size > s->pcap_caplen ? s->pcap_caplen : size;
-
-    hdr.ts.tv_sec = ts / 1000000 + s->start_ts;
-    hdr.ts.tv_usec = ts % 1000000;
-    hdr.caplen = caplen;
-    hdr.len = size;
-
-    dumpiov[0].iov_base = &hdr;
-    dumpiov[0].iov_len = sizeof(hdr);
-    cnt = iov_copy(&dumpiov[1], cnt, iov, cnt, offset, caplen);
-
-    if (writev(s->fd, dumpiov, cnt + 1) != sizeof(hdr) + caplen) {
-        error_report("network dump write error - stopping dump");
-        close(s->fd);
-        s->fd = -1;
-    }
-
+  /* Early return in case of previous error. */
+  if (s->fd < 0) {
     return size;
+  }
+
+  ts = qemu_clock_get_us(QEMU_CLOCK_VIRTUAL);
+  caplen = size > s->pcap_caplen ? s->pcap_caplen : size;
+
+  hdr.ts.tv_sec = ts / 1000000 + s->start_ts;
+  hdr.ts.tv_usec = ts % 1000000;
+  hdr.caplen = caplen;
+  hdr.len = size;
+
+  /* TODO giammi: */
+  // printf("DUMP %d\n", iov->iov_len);
+  // int tmplen = caplen;
+  // int tmpoff = offset;
+  // for (int i = 0 /*, j = 0*/;
+  //      i < cnt && /*j < dst_iov_cnt &&*/ (tmpoff || tmplen); i++) {
+  //   if (tmpoff >= iov[i].iov_len) {
+  //     tmpoff -= iov[i].iov_len;
+  //     continue;
+  //   }
+  //   int len = MIN(tmplen, iov[i].iov_len - offset);
+  //   printf("DUMP %d\n", len);
+  //   for (int k = 0; k < len; k++) {
+  //     printf("%x ", *(char *)(iov[i].iov_base + offset + k));
+  //     if (k % 16 == 0 && k > 0)
+  //       printf("\n");
+  //   }
+  //   printf("\n");
+  //
+  //   // dst_iov[j].iov_base = iov[i].iov_base + offset;
+  //   // dst_iov[j].iov_len = len;
+  //   // j++;
+  //   tmplen -= len;
+  //   offset = 0;
+  // }
+
+  dumpiov[0].iov_base = &hdr;
+  dumpiov[0].iov_len = sizeof(hdr);
+  cnt = iov_copy(&dumpiov[1], cnt, iov, cnt, offset, caplen);
+
+  if (writev(s->fd, dumpiov, cnt + 1) != sizeof(hdr) + caplen) {
+    error_report("network dump write error - stopping dump");
+    close(s->fd);
+    s->fd = -1;
+  }
+
+  return size;
 }
 
 static void dump_cleanup(DumpState *s)
 {
-    close(s->fd);
-    s->fd = -1;
+  close(s->fd);
+  s->fd = -1;
 }
 
-static int net_dump_state_init(DumpState *s, const char *filename,
-                               int len, Error **errp)
+static int net_dump_state_init(DumpState *s, const char *filename, int len,
+                               Error **errp)
 {
-    struct pcap_file_hdr hdr;
-    struct tm tm;
-    int fd;
+  struct pcap_file_hdr hdr;
+  struct tm tm;
+  int fd;
 
-    fd = open(filename, O_CREAT | O_TRUNC | O_WRONLY | O_BINARY, 0644);
-    if (fd < 0) {
-        error_setg_errno(errp, errno, "net dump: can't open %s", filename);
-        return -1;
-    }
+  fd = open(filename, O_CREAT | O_TRUNC | O_WRONLY | O_BINARY, 0644);
+  if (fd < 0) {
+    error_setg_errno(errp, errno, "net dump: can't open %s", filename);
+    return -1;
+  }
 
-    hdr.magic = PCAP_MAGIC;
-    hdr.version_major = 2;
-    hdr.version_minor = 4;
-    hdr.thiszone = 0;
-    hdr.sigfigs = 0;
-    hdr.snaplen = len;
-    hdr.linktype = 1;
+  hdr.magic = PCAP_MAGIC;
+  hdr.version_major = 2;
+  hdr.version_minor = 4;
+  hdr.thiszone = 0;
+  hdr.sigfigs = 0;
+  hdr.snaplen = len;
+  hdr.linktype = 1;
 
-    if (write(fd, &hdr, sizeof(hdr)) < sizeof(hdr)) {
-        error_setg_errno(errp, errno, "net dump write error");
-        close(fd);
-        return -1;
-    }
+  if (write(fd, &hdr, sizeof(hdr)) < sizeof(hdr)) {
+    error_setg_errno(errp, errno, "net dump write error");
+    close(fd);
+    return -1;
+  }
 
-    s->fd = fd;
-    s->pcap_caplen = len;
+  s->fd = fd;
+  s->pcap_caplen = len;
 
-    qemu_get_timedate(&tm, 0);
-    s->start_ts = mktime(&tm);
+  qemu_get_timedate(&tm, 0);
+  s->start_ts = mktime(&tm);
 
-    return 0;
+  return 0;
 }
 
 #define TYPE_FILTER_DUMP "filter-dump"
@@ -143,110 +169,111 @@ static int net_dump_state_init(DumpState *s, const char *filename,
 OBJECT_DECLARE_SIMPLE_TYPE(NetFilterDumpState, FILTER_DUMP)
 
 struct NetFilterDumpState {
-    NetFilterState nfs;
-    DumpState ds;
-    char *filename;
-    uint32_t maxlen;
+  NetFilterState nfs;
+  DumpState ds;
+  char *filename;
+  uint32_t maxlen;
 };
 
 static ssize_t filter_dump_receive_iov(NetFilterState *nf, NetClientState *sndr,
                                        unsigned flags, const struct iovec *iov,
                                        int iovcnt, NetPacketSent *sent_cb)
 {
-    NetFilterDumpState *nfds = FILTER_DUMP(nf);
-    int offset = qemu_get_using_vnet_hdr(nf->netdev) ?
-                 qemu_get_vnet_hdr_len(nf->netdev) : 0;
+  NetFilterDumpState *nfds = FILTER_DUMP(nf);
+  int offset = qemu_get_using_vnet_hdr(nf->netdev)
+                   ? qemu_get_vnet_hdr_len(nf->netdev)
+                   : 0;
 
-    dump_receive_iov(&nfds->ds, iov, iovcnt, offset);
-    return 0;
+  dump_receive_iov(&nfds->ds, iov, iovcnt, offset);
+  return 0;
 }
 
 static void filter_dump_cleanup(NetFilterState *nf)
 {
-    NetFilterDumpState *nfds = FILTER_DUMP(nf);
+  NetFilterDumpState *nfds = FILTER_DUMP(nf);
 
-    dump_cleanup(&nfds->ds);
+  dump_cleanup(&nfds->ds);
 }
 
 static void filter_dump_setup(NetFilterState *nf, Error **errp)
 {
-    NetFilterDumpState *nfds = FILTER_DUMP(nf);
+  NetFilterDumpState *nfds = FILTER_DUMP(nf);
 
-    if (!nfds->filename) {
-        error_setg(errp, "dump filter needs 'file' property set!");
-        return;
-    }
+  if (!nfds->filename) {
+    error_setg(errp, "dump filter needs 'file' property set!");
+    return;
+  }
 
-    net_dump_state_init(&nfds->ds, nfds->filename, nfds->maxlen, errp);
+  net_dump_state_init(&nfds->ds, nfds->filename, nfds->maxlen, errp);
 }
 
 static void filter_dump_get_maxlen(Object *obj, Visitor *v, const char *name,
                                    void *opaque, Error **errp)
 {
-    NetFilterDumpState *nfds = FILTER_DUMP(obj);
-    uint32_t value = nfds->maxlen;
+  NetFilterDumpState *nfds = FILTER_DUMP(obj);
+  uint32_t value = nfds->maxlen;
 
-    visit_type_uint32(v, name, &value, errp);
+  visit_type_uint32(v, name, &value, errp);
 }
 
 static void filter_dump_set_maxlen(Object *obj, Visitor *v, const char *name,
                                    void *opaque, Error **errp)
 {
-    NetFilterDumpState *nfds = FILTER_DUMP(obj);
-    uint32_t value;
+  NetFilterDumpState *nfds = FILTER_DUMP(obj);
+  uint32_t value;
 
-    if (!visit_type_uint32(v, name, &value, errp)) {
-        return;
-    }
-    if (value == 0) {
-        error_setg(errp, "Property '%s.%s' doesn't take value '%u'",
-                   object_get_typename(obj), name, value);
-        return;
-    }
-    nfds->maxlen = value;
+  if (!visit_type_uint32(v, name, &value, errp)) {
+    return;
+  }
+  if (value == 0) {
+    error_setg(errp, "Property '%s.%s' doesn't take value '%u'",
+               object_get_typename(obj), name, value);
+    return;
+  }
+  nfds->maxlen = value;
 }
 
 static char *file_dump_get_filename(Object *obj, Error **errp)
 {
-    NetFilterDumpState *nfds = FILTER_DUMP(obj);
+  NetFilterDumpState *nfds = FILTER_DUMP(obj);
 
-    return g_strdup(nfds->filename);
+  return g_strdup(nfds->filename);
 }
 
 static void file_dump_set_filename(Object *obj, const char *value, Error **errp)
 {
-   NetFilterDumpState *nfds = FILTER_DUMP(obj);
+  NetFilterDumpState *nfds = FILTER_DUMP(obj);
 
-    g_free(nfds->filename);
-    nfds->filename = g_strdup(value);
+  g_free(nfds->filename);
+  nfds->filename = g_strdup(value);
 }
 
 static void filter_dump_instance_init(Object *obj)
 {
-    NetFilterDumpState *nfds = FILTER_DUMP(obj);
+  NetFilterDumpState *nfds = FILTER_DUMP(obj);
 
-    nfds->maxlen = 65536;
+  nfds->maxlen = 65536;
 }
 
 static void filter_dump_instance_finalize(Object *obj)
 {
-    NetFilterDumpState *nfds = FILTER_DUMP(obj);
+  NetFilterDumpState *nfds = FILTER_DUMP(obj);
 
-    g_free(nfds->filename);
+  g_free(nfds->filename);
 }
 
 static void filter_dump_class_init(ObjectClass *oc, void *data)
 {
-    NetFilterClass *nfc = NETFILTER_CLASS(oc);
+  NetFilterClass *nfc = NETFILTER_CLASS(oc);
 
-    object_class_property_add(oc, "maxlen", "uint32", filter_dump_get_maxlen,
-                              filter_dump_set_maxlen, NULL, NULL);
-    object_class_property_add_str(oc, "file", file_dump_get_filename,
-                                  file_dump_set_filename);
+  object_class_property_add(oc, "maxlen", "uint32", filter_dump_get_maxlen,
+                            filter_dump_set_maxlen, NULL, NULL);
+  object_class_property_add_str(oc, "file", file_dump_get_filename,
+                                file_dump_set_filename);
 
-    nfc->setup = filter_dump_setup;
-    nfc->cleanup = filter_dump_cleanup;
-    nfc->receive_iov = filter_dump_receive_iov;
+  nfc->setup = filter_dump_setup;
+  nfc->cleanup = filter_dump_cleanup;
+  nfc->receive_iov = filter_dump_receive_iov;
 }
 
 static const TypeInfo filter_dump_info = {
@@ -260,7 +287,7 @@ static const TypeInfo filter_dump_info = {
 
 static void filter_dump_register_types(void)
 {
-    type_register_static(&filter_dump_info);
+  type_register_static(&filter_dump_info);
 }
 
 type_init(filter_dump_register_types);

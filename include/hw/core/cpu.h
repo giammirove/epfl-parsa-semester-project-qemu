@@ -59,8 +59,7 @@ typedef int (*WriteCoreDumpFunction)(const void *buf, size_t size,
  * cpu_exec_realizefn() for use in hot code paths.
  */
 typedef struct CPUClass CPUClass;
-DECLARE_CLASS_CHECKERS(CPUClass, CPU,
-                       TYPE_CPU)
+DECLARE_CLASS_CHECKERS(CPUClass, CPU, TYPE_CPU)
 
 /**
  * OBJECT_DECLARE_CPU_TYPE:
@@ -76,14 +75,15 @@ DECLARE_CLASS_CHECKERS(CPUClass, CPU,
  *
  * The object struct and class struct need to be declared manually.
  */
-#define OBJECT_DECLARE_CPU_TYPE(CpuInstanceType, CpuClassType, CPU_MODULE_OBJ_NAME) \
-    typedef struct ArchCPU CpuInstanceType; \
-    OBJECT_DECLARE_TYPE(ArchCPU, CpuClassType, CPU_MODULE_OBJ_NAME);
+#define OBJECT_DECLARE_CPU_TYPE(CpuInstanceType, CpuClassType,                 \
+                                CPU_MODULE_OBJ_NAME)                           \
+  typedef struct ArchCPU CpuInstanceType;                                      \
+  OBJECT_DECLARE_TYPE(ArchCPU, CpuClassType, CPU_MODULE_OBJ_NAME);
 
 typedef enum MMUAccessType {
-    MMU_DATA_LOAD  = 0,
-    MMU_DATA_STORE = 1,
-    MMU_INST_FETCH = 2
+  MMU_DATA_LOAD = 0,
+  MMU_DATA_STORE = 1,
+  MMU_INST_FETCH = 2
 #define MMU_ACCESS_COUNT 3
 } MMUAccessType;
 
@@ -141,52 +141,52 @@ struct SysemuCPUOps;
  * Represents a CPU family or model.
  */
 struct CPUClass {
-    /*< private >*/
-    DeviceClass parent_class;
-    /*< public >*/
+  /*< private >*/
+  DeviceClass parent_class;
+  /*< public >*/
 
-    ObjectClass *(*class_by_name)(const char *cpu_model);
-    void (*parse_features)(const char *typename, char *str, Error **errp);
+  ObjectClass *(*class_by_name)(const char *cpu_model);
+  void (*parse_features)(const char *typename, char *str, Error **errp);
 
-    bool (*has_work)(CPUState *cpu);
-    int (*mmu_index)(CPUState *cpu, bool ifetch);
-    int (*memory_rw_debug)(CPUState *cpu, vaddr addr,
-                           uint8_t *buf, int len, bool is_write);
-    void (*dump_state)(CPUState *cpu, FILE *, int flags);
-    void (*query_cpu_fast)(CPUState *cpu, CpuInfoFast *value);
-    int64_t (*get_arch_id)(CPUState *cpu);
-    void (*set_pc)(CPUState *cpu, vaddr value);
-    vaddr (*get_pc)(CPUState *cpu);
-    int (*gdb_read_register)(CPUState *cpu, GByteArray *buf, int reg);
-    int (*gdb_write_register)(CPUState *cpu, uint8_t *buf, int reg);
-    vaddr (*gdb_adjust_breakpoint)(CPUState *cpu, vaddr addr);
+  bool (*has_work)(CPUState *cpu);
+  int (*mmu_index)(CPUState *cpu, bool ifetch);
+  int (*memory_rw_debug)(CPUState *cpu, vaddr addr, uint8_t *buf, int len,
+                         bool is_write);
+  void (*dump_state)(CPUState *cpu, FILE *, int flags);
+  void (*query_cpu_fast)(CPUState *cpu, CpuInfoFast *value);
+  int64_t (*get_arch_id)(CPUState *cpu);
+  void (*set_pc)(CPUState *cpu, vaddr value);
+  vaddr (*get_pc)(CPUState *cpu);
+  int (*gdb_read_register)(CPUState *cpu, GByteArray *buf, int reg);
+  int (*gdb_write_register)(CPUState *cpu, uint8_t *buf, int reg);
+  vaddr (*gdb_adjust_breakpoint)(CPUState *cpu, vaddr addr);
 
-    const char *gdb_core_xml_file;
-    const gchar * (*gdb_arch_name)(CPUState *cpu);
+  const char *gdb_core_xml_file;
+  const gchar *(*gdb_arch_name)(CPUState *cpu);
 
-    void (*disas_set_info)(CPUState *cpu, disassemble_info *info);
+  void (*disas_set_info)(CPUState *cpu, disassemble_info *info);
 
-    const char *deprecation_note;
-    struct AccelCPUClass *accel_cpu;
+  const char *deprecation_note;
+  struct AccelCPUClass *accel_cpu;
 
-    /* when system emulation is not available, this pointer is NULL */
-    const struct SysemuCPUOps *sysemu_ops;
+  /* when system emulation is not available, this pointer is NULL */
+  const struct SysemuCPUOps *sysemu_ops;
 
-    /* when TCG is not available, this pointer is NULL */
-    const TCGCPUOps *tcg_ops;
+  /* when TCG is not available, this pointer is NULL */
+  const TCGCPUOps *tcg_ops;
 
-    /*
-     * if not NULL, this is called in order for the CPUClass to initialize
-     * class data that depends on the accelerator, see accel/accel-common.c.
-     */
-    void (*init_accel_cpu)(struct AccelCPUClass *accel_cpu, CPUClass *cc);
+  /*
+   * if not NULL, this is called in order for the CPUClass to initialize
+   * class data that depends on the accelerator, see accel/accel-common.c.
+   */
+  void (*init_accel_cpu)(struct AccelCPUClass *accel_cpu, CPUClass *cc);
 
-    /*
-     * Keep non-pointer data at the end to minimize holes.
-     */
-    int reset_dump_flags;
-    int gdb_num_core_regs;
-    bool gdb_stop_before_watchpoint;
+  /*
+   * Keep non-pointer data at the end to minimize holes.
+   */
+  int reset_dump_flags;
+  int gdb_num_core_regs;
+  bool gdb_stop_before_watchpoint;
 };
 
 /*
@@ -204,61 +204,61 @@ struct CPUClass {
  * also why we don't want to combine the two structs.
  */
 typedef struct CPUTLBEntryFull {
+  /*
+   * @xlat_section contains:
+   *  - in the lower TARGET_PAGE_BITS, a physical section number
+   *  - with the lower TARGET_PAGE_BITS masked off, an offset which
+   *    must be added to the virtual address to obtain:
+   *     + the ram_addr_t of the target RAM (if the physical section
+   *       number is PHYS_SECTION_NOTDIRTY or PHYS_SECTION_ROM)
+   *     + the offset within the target MemoryRegion (otherwise)
+   */
+  hwaddr xlat_section;
+
+  /*
+   * @phys_addr contains the physical address in the address space
+   * given by cpu_asidx_from_attrs(cpu, @attrs).
+   */
+  hwaddr phys_addr;
+
+  /* @attrs contains the memory transaction attributes for the page. */
+  MemTxAttrs attrs;
+
+  /* @prot contains the complete protections for the page. */
+  uint8_t prot;
+
+  /* @lg_page_size contains the log2 of the page size. */
+  uint8_t lg_page_size;
+
+  /* Additional tlb flags requested by tlb_fill. */
+  uint8_t tlb_fill_flags;
+
+  /*
+   * Additional tlb flags for use by the slow path. If non-zero,
+   * the corresponding CPUTLBEntry comparator must have TLB_FORCE_SLOW.
+   */
+  uint8_t slow_flags[MMU_ACCESS_COUNT];
+
+  /*
+   * Allow target-specific additions to this structure.
+   * This may be used to cache items from the guest cpu
+   * page tables for later use by the implementation.
+   */
+  union {
     /*
-     * @xlat_section contains:
-     *  - in the lower TARGET_PAGE_BITS, a physical section number
-     *  - with the lower TARGET_PAGE_BITS masked off, an offset which
-     *    must be added to the virtual address to obtain:
-     *     + the ram_addr_t of the target RAM (if the physical section
-     *       number is PHYS_SECTION_NOTDIRTY or PHYS_SECTION_ROM)
-     *     + the offset within the target MemoryRegion (otherwise)
+     * Cache the attrs and shareability fields from the page table entry.
+     *
+     * For ARMMMUIdx_Stage2*, pte_attrs is the S2 descriptor bits [5:2].
+     * Otherwise, pte_attrs is the same as the MAIR_EL1 8-bit format.
+     * For shareability and guarded, as in the SH and GP fields respectively
+     * of the VMSAv8-64 PTEs.
      */
-    hwaddr xlat_section;
-
-    /*
-     * @phys_addr contains the physical address in the address space
-     * given by cpu_asidx_from_attrs(cpu, @attrs).
-     */
-    hwaddr phys_addr;
-
-    /* @attrs contains the memory transaction attributes for the page. */
-    MemTxAttrs attrs;
-
-    /* @prot contains the complete protections for the page. */
-    uint8_t prot;
-
-    /* @lg_page_size contains the log2 of the page size. */
-    uint8_t lg_page_size;
-
-    /* Additional tlb flags requested by tlb_fill. */
-    uint8_t tlb_fill_flags;
-
-    /*
-     * Additional tlb flags for use by the slow path. If non-zero,
-     * the corresponding CPUTLBEntry comparator must have TLB_FORCE_SLOW.
-     */
-    uint8_t slow_flags[MMU_ACCESS_COUNT];
-
-    /*
-     * Allow target-specific additions to this structure.
-     * This may be used to cache items from the guest cpu
-     * page tables for later use by the implementation.
-     */
-    union {
-        /*
-         * Cache the attrs and shareability fields from the page table entry.
-         *
-         * For ARMMMUIdx_Stage2*, pte_attrs is the S2 descriptor bits [5:2].
-         * Otherwise, pte_attrs is the same as the MAIR_EL1 8-bit format.
-         * For shareability and guarded, as in the SH and GP fields respectively
-         * of the VMSAv8-64 PTEs.
-         */
-        struct {
-            uint8_t pte_attrs;
-            uint8_t shareability;
-            bool guarded;
-        } arm;
-    } extra;
+    struct {
+      uint8_t pte_attrs;
+      uint8_t shareability;
+      bool guarded;
+    } arm;
+  } extra;
 } CPUTLBEntryFull;
 
 /*
@@ -266,47 +266,47 @@ typedef struct CPUTLBEntryFull {
  * the TCG fast path.
  */
 typedef struct CPUTLBDesc {
-    /*
-     * Describe a region covering all of the large pages allocated
-     * into the tlb.  When any page within this region is flushed,
-     * we must flush the entire tlb.  The region is matched if
-     * (addr & large_page_mask) == large_page_addr.
-     */
-    vaddr large_page_addr;
-    vaddr large_page_mask;
-    /* host time (in ns) at the beginning of the time window */
-    int64_t window_begin_ns;
-    /* maximum number of entries observed in the window */
-    size_t window_max_entries;
-    size_t n_used_entries;
-    /* The next index to use in the tlb victim table.  */
-    size_t vindex;
-    /* The tlb victim table, in two parts.  */
-    CPUTLBEntry vtable[CPU_VTLB_SIZE];
-    CPUTLBEntryFull vfulltlb[CPU_VTLB_SIZE];
-    CPUTLBEntryFull *fulltlb;
+  /*
+   * Describe a region covering all of the large pages allocated
+   * into the tlb.  When any page within this region is flushed,
+   * we must flush the entire tlb.  The region is matched if
+   * (addr & large_page_mask) == large_page_addr.
+   */
+  vaddr large_page_addr;
+  vaddr large_page_mask;
+  /* host time (in ns) at the beginning of the time window */
+  int64_t window_begin_ns;
+  /* maximum number of entries observed in the window */
+  size_t window_max_entries;
+  size_t n_used_entries;
+  /* The next index to use in the tlb victim table.  */
+  size_t vindex;
+  /* The tlb victim table, in two parts.  */
+  CPUTLBEntry vtable[CPU_VTLB_SIZE];
+  CPUTLBEntryFull vfulltlb[CPU_VTLB_SIZE];
+  CPUTLBEntryFull *fulltlb;
 } CPUTLBDesc;
 
 /*
  * Data elements that are shared between all MMU modes.
  */
 typedef struct CPUTLBCommon {
-    /* Serialize updates to f.table and d.vtable, and others as noted. */
-    QemuSpin lock;
-    /*
-     * Within dirty, for each bit N, modifications have been made to
-     * mmu_idx N since the last time that mmu_idx was flushed.
-     * Protected by tlb_c.lock.
-     */
-    uint16_t dirty;
-    /*
-     * Statistics.  These are not lock protected, but are read and
-     * written atomically.  This allows the monitor to print a snapshot
-     * of the stats without interfering with the cpu.
-     */
-    size_t full_flush_count;
-    size_t part_flush_count;
-    size_t elide_flush_count;
+  /* Serialize updates to f.table and d.vtable, and others as noted. */
+  QemuSpin lock;
+  /*
+   * Within dirty, for each bit N, modifications have been made to
+   * mmu_idx N since the last time that mmu_idx was flushed.
+   * Protected by tlb_c.lock.
+   */
+  uint16_t dirty;
+  /*
+   * Statistics.  These are not lock protected, but are read and
+   * written atomically.  This allows the monitor to print a snapshot
+   * of the stats without interfering with the cpu.
+   */
+  size_t full_flush_count;
+  size_t part_flush_count;
+  size_t elide_flush_count;
 } CPUTLBCommon;
 
 /*
@@ -317,9 +317,9 @@ typedef struct CPUTLBCommon {
  */
 typedef struct CPUTLB {
 #ifdef CONFIG_TCG
-    CPUTLBCommon c;
-    CPUTLBDesc d[NB_MMU_MODES];
-    CPUTLBDescFast f[NB_MMU_MODES];
+  CPUTLBCommon c;
+  CPUTLBDesc d[NB_MMU_MODES];
+  CPUTLBDescFast f[NB_MMU_MODES];
 #endif
 } CPUTLB;
 
@@ -331,16 +331,16 @@ typedef struct CPUTLB {
  * for both decrementer underflow and exceptions.
  */
 typedef union IcountDecr {
-    uint32_t u32;
-    struct {
+  uint32_t u32;
+  struct {
 #if HOST_BIG_ENDIAN
-        uint16_t high;
-        uint16_t low;
+    uint16_t high;
+    uint16_t low;
 #else
-        uint16_t low;
-        uint16_t high;
+    uint16_t low;
+    uint16_t high;
 #endif
-    } u16;
+  } u16;
 } IcountDecr;
 
 /*
@@ -348,24 +348,24 @@ typedef union IcountDecr {
  * via small negative offsets.
  */
 typedef struct CPUNegativeOffsetState {
-    CPUTLB tlb;
-    IcountDecr icount_decr;
-    bool can_do_io;
+  CPUTLB tlb;
+  IcountDecr icount_decr;
+  bool can_do_io;
 } CPUNegativeOffsetState;
 
 typedef struct CPUBreakpoint {
-    vaddr pc;
-    int flags; /* BP_* */
-    QTAILQ_ENTRY(CPUBreakpoint) entry;
+  vaddr pc;
+  int flags; /* BP_* */
+  QTAILQ_ENTRY(CPUBreakpoint) entry;
 } CPUBreakpoint;
 
 struct CPUWatchpoint {
-    vaddr vaddr;
-    vaddr len;
-    vaddr hitaddr;
-    MemTxAttrs hitattrs;
-    int flags; /* BP_* */
-    QTAILQ_ENTRY(CPUWatchpoint) entry;
+  vaddr vaddr;
+  vaddr len;
+  vaddr hitaddr;
+  MemTxAttrs hitattrs;
+  int flags; /* BP_* */
+  QTAILQ_ENTRY(CPUWatchpoint) entry;
 };
 
 struct KVMState;
@@ -377,17 +377,17 @@ struct kvm_run;
  * hosts in a single parameter
  */
 typedef union {
-    int           host_int;
-    unsigned long host_ulong;
-    void         *host_ptr;
-    vaddr         target_ptr;
+  int host_int;
+  unsigned long host_ulong;
+  void *host_ptr;
+  vaddr target_ptr;
 } run_on_cpu_data;
 
-#define RUN_ON_CPU_HOST_PTR(p)    ((run_on_cpu_data){.host_ptr = (p)})
-#define RUN_ON_CPU_HOST_INT(i)    ((run_on_cpu_data){.host_int = (i)})
+#define RUN_ON_CPU_HOST_PTR(p) ((run_on_cpu_data){.host_ptr = (p)})
+#define RUN_ON_CPU_HOST_INT(i) ((run_on_cpu_data){.host_int = (i)})
 #define RUN_ON_CPU_HOST_ULONG(ul) ((run_on_cpu_data){.host_ulong = (ul)})
-#define RUN_ON_CPU_TARGET_PTR(v)  ((run_on_cpu_data){.target_ptr = (v)})
-#define RUN_ON_CPU_NULL           RUN_ON_CPU_HOST_PTR(NULL)
+#define RUN_ON_CPU_TARGET_PTR(v) ((run_on_cpu_data){.target_ptr = (v)})
+#define RUN_ON_CPU_NULL RUN_ON_CPU_HOST_PTR(NULL)
 
 typedef void (*run_on_cpu_func)(CPUState *cpu, run_on_cpu_data data);
 
@@ -452,127 +452,130 @@ struct qemu_work_item;
  * and eliminate a hole between CPUState and CPUArchState within ArchCPU.
  */
 struct CPUState {
-    /*< private >*/
-    DeviceState parent_obj;
-    /* cache to avoid expensive CPU_GET_CLASS */
-    CPUClass *cc;
-    /*< public >*/
+  /*< private >*/
+  DeviceState parent_obj;
+  /* cache to avoid expensive CPU_GET_CLASS */
+  CPUClass *cc;
+  /*< public >*/
 
-    int nr_cores;
-    int nr_threads;
+  int nr_cores;
+  int nr_threads;
 
-    struct QemuThread *thread;
+  struct QemuThread *thread;
 #ifdef _WIN32
-    QemuSemaphore sem;
+  QemuSemaphore sem;
 #endif
-    int thread_id;
-    bool running, has_waiter;
-    struct QemuCond *halt_cond;
-    bool thread_kicked;
-    bool created;
-    bool stop;
-    bool stopped;
+  int thread_id;
+  bool running, has_waiter;
+  struct QemuCond *halt_cond;
+  bool thread_kicked;
+  bool created;
+  bool stop;
+  bool stopped;
 
-    /* Should CPU start in powered-off state? */
-    bool start_powered_off;
+  /* Should CPU start in powered-off state? */
+  bool start_powered_off;
 
-    bool unplug;
-    bool crash_occurred;
-    bool exit_request;
-    int exclusive_context_count;
-    uint32_t cflags_next_tb;
-    /* updates protected by BQL */
-    uint32_t interrupt_request;
-    int singlestep_enabled;
-    int64_t icount_budget;
-    int64_t icount_extra;
-    uint64_t random_seed;
-    sigjmp_buf jmp_env;
+  bool unplug;
+  bool crash_occurred;
+  bool exit_request;
+  int exclusive_context_count;
+  uint32_t cflags_next_tb;
+  /* updates protected by BQL */
+  uint32_t interrupt_request;
+  int singlestep_enabled;
+  int64_t icount_budget;
+  int64_t icount_extra;
+  uint64_t random_seed;
+  sigjmp_buf jmp_env;
 
-    QemuMutex work_mutex;
-    QSIMPLEQ_HEAD(, qemu_work_item) work_list;
+  QemuMutex work_mutex;
+  QSIMPLEQ_HEAD(, qemu_work_item) work_list;
 
-    CPUAddressSpace *cpu_ases;
-    int num_ases;
-    AddressSpace *as;
-    MemoryRegion *memory;
+  CPUAddressSpace *cpu_ases;
+  int num_ases;
+  AddressSpace *as;
+  MemoryRegion *memory;
 
-    CPUJumpCache *tb_jmp_cache;
+  CPUJumpCache *tb_jmp_cache;
 
-    GArray *gdb_regs;
-    int gdb_num_regs;
-    int gdb_num_g_regs;
-    QTAILQ_ENTRY(CPUState) node;
+  GArray *gdb_regs;
+  int gdb_num_regs;
+  int gdb_num_g_regs;
+  QTAILQ_ENTRY(CPUState) node;
 
-    /* ice debug support */
-    QTAILQ_HEAD(, CPUBreakpoint) breakpoints;
+  /* ice debug support */
+  QTAILQ_HEAD(, CPUBreakpoint) breakpoints;
 
-    QTAILQ_HEAD(, CPUWatchpoint) watchpoints;
-    CPUWatchpoint *watchpoint_hit;
+  QTAILQ_HEAD(, CPUWatchpoint) watchpoints;
+  CPUWatchpoint *watchpoint_hit;
 
-    void *opaque;
+  void *opaque;
 
-    /* In order to avoid passing too many arguments to the MMIO helpers,
-     * we store some rarely used information in the CPU context.
-     */
-    uintptr_t mem_io_pc;
+  /* In order to avoid passing too many arguments to the MMIO helpers,
+   * we store some rarely used information in the CPU context.
+   */
+  uintptr_t mem_io_pc;
 
-    /* Only used in KVM */
-    int kvm_fd;
-    struct KVMState *kvm_state;
-    struct kvm_run *kvm_run;
-    struct kvm_dirty_gfn *kvm_dirty_gfns;
-    uint32_t kvm_fetch_index;
-    uint64_t dirty_pages;
-    int kvm_vcpu_stats_fd;
+  /* Only used in KVM */
+  int kvm_fd;
+  struct KVMState *kvm_state;
+  struct kvm_run *kvm_run;
+  struct kvm_dirty_gfn *kvm_dirty_gfns;
+  uint32_t kvm_fetch_index;
+  uint64_t dirty_pages;
+  int kvm_vcpu_stats_fd;
 
-    /* Use by accel-block: CPU is executing an ioctl() */
-    QemuLockCnt in_ioctl_lock;
+  /* Use by accel-block: CPU is executing an ioctl() */
+  QemuLockCnt in_ioctl_lock;
 
 #ifdef CONFIG_PLUGIN
-    /*
-     * The callback pointer stays in the main CPUState as it is
-     * accessed via TCG (see gen_empty_mem_helper).
-     */
-    GArray *plugin_mem_cbs;
-    CPUPluginState *plugin_state;
+  /*
+   * The callback pointer stays in the main CPUState as it is
+   * accessed via TCG (see gen_empty_mem_helper).
+   */
+  GArray *plugin_mem_cbs;
+  CPUPluginState *plugin_state;
+  /* TODO giammi: */
+  QflexPluginState *qflex_state;
+  // uint64_t (*get_qflex_icount)(void);
 #endif
 
-    /* TODO Move common fields from CPUArchState here. */
-    int cpu_index;
-    int cluster_index;
-    uint32_t tcg_cflags;
-    uint32_t halted;
-    int32_t exception_index;
+  /* TODO Move common fields from CPUArchState here. */
+  int cpu_index;
+  int cluster_index;
+  uint32_t tcg_cflags;
+  uint32_t halted;
+  int32_t exception_index;
 
-    AccelCPUState *accel;
-    /* shared by kvm and hvf */
-    bool vcpu_dirty;
+  AccelCPUState *accel;
+  /* shared by kvm and hvf */
+  bool vcpu_dirty;
 
-    /* Used to keep track of an outstanding cpu throttle thread for migration
-     * autoconverge
-     */
-    bool throttle_thread_scheduled;
+  /* Used to keep track of an outstanding cpu throttle thread for migration
+   * autoconverge
+   */
+  bool throttle_thread_scheduled;
 
-    /*
-     * Sleep throttle_us_per_full microseconds once dirty ring is full
-     * if dirty page rate limit is enabled.
-     */
-    int64_t throttle_us_per_full;
+  /*
+   * Sleep throttle_us_per_full microseconds once dirty ring is full
+   * if dirty page rate limit is enabled.
+   */
+  int64_t throttle_us_per_full;
 
-    bool ignore_memory_transaction_failures;
+  bool ignore_memory_transaction_failures;
 
-    /* Used for user-only emulation of prctl(PR_SET_UNALIGN). */
-    bool prctl_unalign_sigbus;
+  /* Used for user-only emulation of prctl(PR_SET_UNALIGN). */
+  bool prctl_unalign_sigbus;
 
-    /* track IOMMUs whose translations we've cached in the TCG TLB */
-    GArray *iommu_notifiers;
+  /* track IOMMUs whose translations we've cached in the TCG TLB */
+  GArray *iommu_notifiers;
 
-    /*
-     * MUST BE LAST in order to minimize the displacement to CPUArchState.
-     */
-    char neg_align[-sizeof(CPUNegativeOffsetState) % 16] QEMU_ALIGNED(16);
-    CPUNegativeOffsetState neg;
+  /*
+   * MUST BE LAST in order to minimize the displacement to CPUArchState.
+   */
+  char neg_align[-sizeof(CPUNegativeOffsetState) % 16] QEMU_ALIGNED(16);
+  CPUNegativeOffsetState neg;
 };
 
 /* Validate placement of CPUNegativeOffsetState. */
@@ -581,18 +584,18 @@ QEMU_BUILD_BUG_ON(offsetof(CPUState, neg) !=
 
 static inline CPUArchState *cpu_env(CPUState *cpu)
 {
-    /* We validate that CPUArchState follows CPUState in cpu-all.h. */
-    return (CPUArchState *)(cpu + 1);
+  /* We validate that CPUArchState follows CPUState in cpu-all.h. */
+  return (CPUArchState *)(cpu + 1);
 }
 
 typedef QTAILQ_HEAD(CPUTailQ, CPUState) CPUTailQ;
 extern CPUTailQ cpus_queue;
 
-#define first_cpu        QTAILQ_FIRST_RCU(&cpus_queue)
-#define CPU_NEXT(cpu)    QTAILQ_NEXT_RCU(cpu, node)
+#define first_cpu QTAILQ_FIRST_RCU(&cpus_queue)
+#define CPU_NEXT(cpu) QTAILQ_NEXT_RCU(cpu, node)
 #define CPU_FOREACH(cpu) QTAILQ_FOREACH_RCU(cpu, &cpus_queue, node)
-#define CPU_FOREACH_SAFE(cpu, next_cpu) \
-    QTAILQ_FOREACH_SAFE_RCU(cpu, &cpus_queue, node, next_cpu)
+#define CPU_FOREACH_SAFE(cpu, next_cpu)                                        \
+  QTAILQ_FOREACH_SAFE_RCU(cpu, &cpus_queue, node, next_cpu)
 
 extern __thread CPUState *current_cpu;
 
@@ -633,8 +636,8 @@ bool cpu_get_memory_mapping(CPUState *cpu, MemoryMappingList *list,
  * @cpuid: ID number of the CPU
  * @opaque: pointer to the CPUState struct
  */
-int cpu_write_elf64_note(WriteCoreDumpFunction f, CPUState *cpu,
-                         int cpuid, void *opaque);
+int cpu_write_elf64_note(WriteCoreDumpFunction f, CPUState *cpu, int cpuid,
+                         void *opaque);
 
 /**
  * cpu_write_elf64_qemunote:
@@ -653,8 +656,8 @@ int cpu_write_elf64_qemunote(WriteCoreDumpFunction f, CPUState *cpu,
  * @cpuid: ID number of the CPU
  * @opaque: pointer to the CPUState struct
  */
-int cpu_write_elf32_note(WriteCoreDumpFunction f, CPUState *cpu,
-                         int cpuid, void *opaque);
+int cpu_write_elf32_note(WriteCoreDumpFunction f, CPUState *cpu, int cpuid,
+                         void *opaque);
 
 /**
  * cpu_write_elf32_qemunote:
@@ -685,10 +688,10 @@ GuestPanicInformation *cpu_get_crash_info(CPUState *cpu);
  * @CPU_DUMP_VPU: dump VPU registers
  */
 enum CPUDumpFlags {
-    CPU_DUMP_CODE = 0x00010000,
-    CPU_DUMP_FPU  = 0x00020000,
-    CPU_DUMP_CCOP = 0x00040000,
-    CPU_DUMP_VPU  = 0x00080000,
+  CPU_DUMP_CODE = 0x00010000,
+  CPU_DUMP_FPU = 0x00020000,
+  CPU_DUMP_CCOP = 0x00040000,
+  CPU_DUMP_VPU = 0x00080000,
 };
 
 /**
@@ -823,10 +826,10 @@ const char *parse_cpu_option(const char *cpu_option);
  */
 static inline bool cpu_has_work(CPUState *cpu)
 {
-    CPUClass *cc = CPU_GET_CLASS(cpu);
+  CPUClass *cc = CPU_GET_CLASS(cpu);
 
-    g_assert(cc->has_work);
-    return cc->has_work(cpu);
+  g_assert(cc->has_work);
+  return cc->has_work(cpu);
 }
 
 /**
@@ -888,7 +891,8 @@ void run_on_cpu(CPUState *cpu, run_on_cpu_func func, run_on_cpu_data data);
  *
  * Schedules the function @func for execution on the vCPU @cpu asynchronously.
  */
-void async_run_on_cpu(CPUState *cpu, run_on_cpu_func func, run_on_cpu_data data);
+void async_run_on_cpu(CPUState *cpu, run_on_cpu_func func,
+                      run_on_cpu_data data);
 
 /**
  * async_safe_run_on_cpu:
@@ -902,7 +906,8 @@ void async_run_on_cpu(CPUState *cpu, run_on_cpu_func func, run_on_cpu_data data)
  * Unlike run_on_cpu and async_run_on_cpu, the function is run outside the
  * BQL.
  */
-void async_safe_run_on_cpu(CPUState *cpu, run_on_cpu_func func, run_on_cpu_data data);
+void async_safe_run_on_cpu(CPUState *cpu, run_on_cpu_func func,
+                           run_on_cpu_data data);
 
 /**
  * cpu_in_exclusive_context()
@@ -913,7 +918,7 @@ void async_safe_run_on_cpu(CPUState *cpu, run_on_cpu_func func, run_on_cpu_data 
  */
 static inline bool cpu_in_exclusive_context(const CPUState *cpu)
 {
-    return cpu->exclusive_context_count;
+  return cpu->exclusive_context_count;
 }
 
 /**
@@ -965,9 +970,9 @@ void cpu_interrupt(CPUState *cpu, int mask);
  */
 static inline void cpu_set_pc(CPUState *cpu, vaddr addr)
 {
-    CPUClass *cc = CPU_GET_CLASS(cpu);
+  CPUClass *cc = CPU_GET_CLASS(cpu);
 
-    cc->set_pc(cpu, addr);
+  cc->set_pc(cpu, addr);
 }
 
 /**
@@ -1054,9 +1059,9 @@ void end_exclusive(void);
  */
 void qemu_init_vcpu(CPUState *cpu);
 
-#define SSTEP_ENABLE  0x1  /* Enable simulated HW single stepping */
-#define SSTEP_NOIRQ   0x2  /* Do not use IRQ while single stepping */
-#define SSTEP_NOTIMER 0x4  /* Do not Timers while single stepping */
+#define SSTEP_ENABLE 0x1  /* Enable simulated HW single stepping */
+#define SSTEP_NOIRQ 0x2   /* Do not use IRQ while single stepping */
+#define SSTEP_NOTIMER 0x4 /* Do not Timers while single stepping */
 
 /**
  * cpu_single_step:
@@ -1068,18 +1073,18 @@ void qemu_init_vcpu(CPUState *cpu);
 void cpu_single_step(CPUState *cpu, int enabled);
 
 /* Breakpoint/watchpoint flags */
-#define BP_MEM_READ           0x01
-#define BP_MEM_WRITE          0x02
-#define BP_MEM_ACCESS         (BP_MEM_READ | BP_MEM_WRITE)
+#define BP_MEM_READ 0x01
+#define BP_MEM_WRITE 0x02
+#define BP_MEM_ACCESS (BP_MEM_READ | BP_MEM_WRITE)
 #define BP_STOP_BEFORE_ACCESS 0x04
 /* 0x08 currently unused */
-#define BP_GDB                0x10
-#define BP_CPU                0x20
-#define BP_ANY                (BP_GDB | BP_CPU)
-#define BP_HIT_SHIFT          6
-#define BP_WATCHPOINT_HIT_READ  (BP_MEM_READ << BP_HIT_SHIFT)
+#define BP_GDB 0x10
+#define BP_CPU 0x20
+#define BP_ANY (BP_GDB | BP_CPU)
+#define BP_HIT_SHIFT 6
+#define BP_WATCHPOINT_HIT_READ (BP_MEM_READ << BP_HIT_SHIFT)
 #define BP_WATCHPOINT_HIT_WRITE (BP_MEM_WRITE << BP_HIT_SHIFT)
-#define BP_WATCHPOINT_HIT       (BP_MEM_ACCESS << BP_HIT_SHIFT)
+#define BP_WATCHPOINT_HIT (BP_MEM_ACCESS << BP_HIT_SHIFT)
 
 int cpu_breakpoint_insert(CPUState *cpu, vaddr pc, int flags,
                           CPUBreakpoint **breakpoint);
@@ -1090,29 +1095,30 @@ void cpu_breakpoint_remove_all(CPUState *cpu, int mask);
 /* Return true if PC matches an installed breakpoint.  */
 static inline bool cpu_breakpoint_test(CPUState *cpu, vaddr pc, int mask)
 {
-    CPUBreakpoint *bp;
+  CPUBreakpoint *bp;
 
-    if (unlikely(!QTAILQ_EMPTY(&cpu->breakpoints))) {
-        QTAILQ_FOREACH(bp, &cpu->breakpoints, entry) {
-            if (bp->pc == pc && (bp->flags & mask)) {
-                return true;
-            }
-        }
+  if (unlikely(!QTAILQ_EMPTY(&cpu->breakpoints))) {
+    QTAILQ_FOREACH(bp, &cpu->breakpoints, entry)
+    {
+      if (bp->pc == pc && (bp->flags & mask)) {
+        return true;
+      }
     }
-    return false;
+  }
+  return false;
 }
 
 #if defined(CONFIG_USER_ONLY)
 static inline int cpu_watchpoint_insert(CPUState *cpu, vaddr addr, vaddr len,
                                         int flags, CPUWatchpoint **watchpoint)
 {
-    return -ENOSYS;
+  return -ENOSYS;
 }
 
-static inline int cpu_watchpoint_remove(CPUState *cpu, vaddr addr,
-                                        vaddr len, int flags)
+static inline int cpu_watchpoint_remove(CPUState *cpu, vaddr addr, vaddr len,
+                                        int flags)
 {
-    return -ENOSYS;
+  return -ENOSYS;
 }
 
 static inline void cpu_watchpoint_remove_by_ref(CPUState *cpu,
@@ -1120,14 +1126,11 @@ static inline void cpu_watchpoint_remove_by_ref(CPUState *cpu,
 {
 }
 
-static inline void cpu_watchpoint_remove_all(CPUState *cpu, int mask)
-{
-}
+static inline void cpu_watchpoint_remove_all(CPUState *cpu, int mask) {}
 #else
-int cpu_watchpoint_insert(CPUState *cpu, vaddr addr, vaddr len,
-                          int flags, CPUWatchpoint **watchpoint);
-int cpu_watchpoint_remove(CPUState *cpu, vaddr addr,
-                          vaddr len, int flags);
+int cpu_watchpoint_insert(CPUState *cpu, vaddr addr, vaddr len, int flags,
+                          CPUWatchpoint **watchpoint);
+int cpu_watchpoint_remove(CPUState *cpu, vaddr addr, vaddr len, int flags);
 void cpu_watchpoint_remove_by_ref(CPUState *cpu, CPUWatchpoint *watchpoint);
 void cpu_watchpoint_remove_all(CPUState *cpu, int mask);
 #endif
@@ -1143,9 +1146,9 @@ void cpu_watchpoint_remove_all(CPUState *cpu, int mask);
 static inline bool cpu_plugin_mem_cbs_enabled(const CPUState *cpu)
 {
 #ifdef CONFIG_PLUGIN
-    return !!cpu->plugin_mem_cbs;
+  return !!cpu->plugin_mem_cbs;
 #else
-    return false;
+  return false;
 #endif
 }
 
@@ -1188,13 +1191,11 @@ const char *target_name(void);
 
 extern const VMStateDescription vmstate_cpu_common;
 
-#define VMSTATE_CPU() {                                                     \
-    .name = "parent_obj",                                                   \
-    .size = sizeof(CPUState),                                               \
-    .vmsd = &vmstate_cpu_common,                                            \
-    .flags = VMS_STRUCT,                                                    \
-    .offset = 0,                                                            \
-}
+#define VMSTATE_CPU()                                                          \
+  {                                                                            \
+    .name = "parent_obj", .size = sizeof(CPUState),                            \
+    .vmsd = &vmstate_cpu_common, .flags = VMS_STRUCT, .offset = 0,             \
+  }
 #endif /* !CONFIG_USER_ONLY */
 
 #endif /* NEED_CPU_H */
