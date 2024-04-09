@@ -140,6 +140,30 @@ static int tap_packet_send_all(int quanta)
   cpu->qflex_state->pkt_list_send = g_list_alloc();
   return 0;
 }
+
+static bool qflex_dest_to_notify(uint8_t *buf, int size, int *dest_id)
+{
+  bool is_broadcast = true;
+  for (int i = 0; i < 6; i++) {
+    // printf("%x ", *(buf + i));
+    if (*(buf + i) != 0xff) {
+      is_broadcast = false;
+      break;
+    }
+  }
+  *dest_id = -1;
+  bool to_notify = is_broadcast;
+  if (!is_broadcast && size > 41) {
+    for (int i = 38; i < 42; i++) {
+      printf("%x ", *(buf + i));
+    }
+    printf("\n");
+    *dest_id = *(buf + 41) - 100;
+    to_notify |= *dest_id >= 0;
+  }
+
+  return to_notify;
+}
 static ssize_t tap_write_packet(TAPState *s, const struct iovec *iov,
                                 int iovcnt)
 {
@@ -156,7 +180,6 @@ static ssize_t tap_write_packet(TAPState *s, const struct iovec *iov,
   }
   if (cpu->qflex_state->pkt_send == NULL)
     cpu->qflex_state->pkt_send = tap_packet_send_all;
-  // GList *pkt_list = ((GList *)cpu->qflex_state->pkt_list_send);
   /* can not send */
   if (cpu->qflex_state->can_send == 0) {
     // struct QflexIOV *pkt = g_new0(struct QflexIOV, 1);
@@ -169,9 +192,16 @@ static ssize_t tap_write_packet(TAPState *s, const struct iovec *iov,
     return 0;
   }
   if (cpu->qflex_state->can_count == 1) {
-    atomic_fetch_add(&cpu->qflex_state->pkt_sent, 1);
-    // printf("TAP WRITE PACKET %ld\n",
-    //        iov->iov_len - sizeof(struct virtio_net_hdr));
+    int b = sizeof(struct virtio_net_hdr) + 2;
+    int dest_id = -1;
+    if (qflex_dest_to_notify((uint8_t *)(iov->iov_base + b), iov->iov_len - b,
+                             &dest_id)) {
+      atomic_fetch_add(&cpu->qflex_state->pkt_sent, 1);
+      printf("TAP WRITE PACKET %ld\n",
+             iov->iov_len - sizeof(struct virtio_net_hdr));
+      printf("DEST ID %d\n", dest_id);
+    }
+    printf("\n");
   }
 
   len = RETRY_ON_EINTR(writev(s->fd, iov, iovcnt));
@@ -343,8 +373,8 @@ static void tap_send(void *opaque)
 
     /* TODO giammi: */
     /* if init has been completed we should stop receiving packets at will */
-    if (false && atomic_load(&cpu->qflex_state->can_count) == 1) {
-      cpu->qflex_state->pkt_received++;
+    if (atomic_load(&cpu->qflex_state->can_count) == 1) {
+      atomic_fetch_add(&cpu->qflex_state->pkt_received, 1);
       struct QflexPacket *pkt = g_new0(struct QflexPacket, 1);
       pkt->tap_state = opaque;
       pkt->size = size;
@@ -354,31 +384,13 @@ static void tap_send(void *opaque)
         printf("NULL\n");
       }
       // printf("SIZE %ld\n", size - sizeof(struct virtio_net_hdr));
-      bool is_broadcast = true;
-      for (int i = 0; i < 6; i++) {
-        // printf("%x ", *(buf + i));
-        if (*(buf + i) != 0xff) {
-          is_broadcast = false;
-          break;
-        }
-      }
-      // printf("\n");
       int dest_id = -1;
-      bool to_notify = is_broadcast;
-      if (!is_broadcast && size > 41) {
-        // for (int i = 38; i < 42; i++) {
-        //   printf("%x ", *(buf + i));
-        // }
-        // printf("\n");
-        dest_id = *(buf + 41) - 100;
-        to_notify |= dest_id >= 0;
-      }
-      if (to_notify) {
+      if (qflex_dest_to_notify(buf, size, &dest_id)) {
         printf("DEST ID %d\n", dest_id);
         cpu->qflex_state->pkt_notify(dest_id);
       }
       /* TODO giammi: */
-      // printf("TAP READ PACKET %ld\n", size - sizeof(struct virtio_net_hdr));
+      printf("TAP READ PACKET %ld\n", size - sizeof(struct virtio_net_hdr));
       continue;
     }
 

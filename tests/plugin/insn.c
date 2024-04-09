@@ -6,6 +6,7 @@
  */
 #include <inttypes.h>
 #include <assert.h>
+#include <netinet/tcp.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -38,8 +39,8 @@ static GArray *sizes;
 static uint64_t QUANTA = 0;
 /* next quanta to reach expressed in instruction number */
 static _Atomic uint64_t next_quanta = 0;
-/* current quanta */
-static int curr_quanta = 0;
+/* current quanta id : 0,1,2,3,4,... */
+static int quanta_id = 0;
 /* nodes that acked my quanta termination */
 static bool *to_ack_quanta;
 static bool *acked_quanta;
@@ -75,6 +76,12 @@ static int node_id = -1;
 static uint32_t n_nodes = 0;
 /* number of nodes that reached the quanta */
 static _Atomic int nodes_at_quanta = -1;
+/* 1 = quanta reached */
+static _Atomic int quanta_reached = 0;
+static _Atomic int nodes_ready = 0;
+/* node ready that went faster than me during the synchronization phase */
+static _Atomic int buf_nodes_ready = 0;
+static _Atomic int nodes_ack_ready = 0;
 /* number of threads that are blocked waiting for synchronization barrier */
 // static _Atomic int threads_blocked = 0;
 static _Atomic int threads_blocked_cnt = 0;
@@ -92,12 +99,12 @@ QflexPluginState *qflex_state;
 static int nodes_at_boot = 0;
 
 enum HEADERS {
-  QT = 1,  /* quanta termination */
-  AQT = 2, /* ack quanta termination */
-  NC = 3,  /* new connection */
-  BT = 4,  /* boot : DO NOT EDIT (used in afterboot script) */
-  BBT = 5, /* broadcast boot */
-  ACK = 6  /* ack packet */
+  RDY = 1,  /* node is ready */
+  ARDY = 2, /* ack node is ready */
+  NC = 3,   /* new connection */
+  BT = 4,   /* boot : DO NOT EDIT (used in afterboot script) */
+  BBT = 5,  /* broadcast boot */
+  ACK = 6   /* ack packet */
 };
 
 static void *qflex_server_open_thread(void *args);
@@ -106,11 +113,12 @@ static void qflex_clients_open(void);
 static void qflex_server_close(void);
 static void qflex_clients_close(void);
 static int qflex_send_message(char *msg);
-static int qflex_send_self(int msg);
-static int qflex_send_ack(int dest_id);
-static int qflex_send_quanta_termination(int n);
+static int qflex_send_ready(int n, bool is_ack);
 static int qflex_notify_packet(int dest_id);
 static bool qflex_next_quanta(bool node_at_quanta, bool im_at_quanta, int src);
+static bool qflex_check_ready(void);
+static void qflex_move_to_next_quanta(void);
+static void qflex_begin_of_quanta(void);
 
 /*
  * Initialise a new vcpu with reading the register list
@@ -143,7 +151,7 @@ static bool qflex_next_quanta(bool node_at_quanta, bool im_at_quanta, int src)
   else
     at_quanta = atomic_load(&nodes_at_quanta);
 
-  printf("[%d] SITUA  %d -> %ld -> %ld : %ld\n", src, curr_quanta,
+  printf("[%d] SITUA  %d -> %ld -> %ld : %ld\n", src, quanta_id,
          atomic_load(&next_quanta), atomic_load(&atomic_sum),
          atomic_load(&barrier_sum));
 
@@ -158,11 +166,11 @@ static bool qflex_next_quanta(bool node_at_quanta, bool im_at_quanta, int src)
     return false;
   }
 
-  printf("[%d] SYNC COMPLETED %d -> %ld -> %ld\n", src, curr_quanta, nq, as);
+  printf("[%d] SYNC COMPLETED %d -> %ld -> %ld\n", src, quanta_id, nq, as);
   // printf("MSG RECEIVED %d\n", g_list_length(qflex_state->pkt_list) - 1);
   // printf("MSG SENT %ld\n", qflex_state->pkt_sent);
   if (qflex_state->pkt_receive != NULL)
-    qflex_state->pkt_receive(curr_quanta);
+    qflex_state->pkt_receive(quanta_id);
   else {
     // printf("RECEIVE METHOD NOT SET\n");
   }
@@ -178,7 +186,7 @@ static bool qflex_next_quanta(bool node_at_quanta, bool im_at_quanta, int src)
   /* move to next quanta */
   // printf("quanta updated -> %ld\n", (curr_quanta + 1) * QUANTA);
   pthread_cond_broadcast(&barrier_cond);
-  curr_quanta++;
+  quanta_id++;
   atomic_fetch_add(&next_quanta, QUANTA);
   // pthread_mutex_lock(&barrier_lock);
   /* unlock all blocked threads */
@@ -191,6 +199,61 @@ static bool qflex_next_quanta(bool node_at_quanta, bool im_at_quanta, int src)
 
   pthread_mutex_unlock(&sync_lock);
   return true;
+}
+
+static bool qflex_check_ready(void)
+{
+  printf("CHECK READY %ld %ld\n", atomic_load(&qflex_state->pkt_acked),
+         atomic_load(&qflex_state->pkt_sent));
+  if (atomic_load(&quanta_reached) == 1 &&
+      atomic_load(&qflex_state->pkt_acked) ==
+          atomic_load(&qflex_state->pkt_sent)) {
+    printf("SEND READY for %d\n", quanta_id);
+    qflex_send_ready(quanta_id, false);
+    return true;
+  }
+
+  return false;
+}
+
+static void qflex_move_to_next_quanta(void)
+{
+
+  if (qflex_state->pkt_receive != NULL)
+    qflex_state->pkt_receive(quanta_id);
+  else {
+    printf("RECEIVE METHOD NOT SET\n");
+  }
+
+  /* reset */
+  nodes_at_quanta = 0;
+  n_acked_quanta = 0;
+  for (int i = 0; i < n_nodes; ++i)
+    acked_quanta[i] = false;
+  /* move to next quanta */
+  // pthread_cond_broadcast(&barrier_cond);
+  qflex_state->vm_unpause(NULL);
+  /* so that check_ready returns false */
+  atomic_store(&quanta_reached, 0);
+  quanta_id++;
+  printf("[-] MOVE TO NEXT QUANTA -> %d\n", quanta_id);
+  /* `next_quanta` has to be kept unchanged until the beginning of the nextinsn
+   * quanta, since it works as barrier for my `vcpu_insn_exec_before`
+   */
+}
+static void qflex_begin_of_quanta(void)
+{
+  printf("[%d] SYNC COMPLETED\n", quanta_id);
+  printf("-------------------------------------------\n\n");
+  atomic_store(&qflex_state->can_send, 1);
+  atomic_store(&nodes_ready, atomic_load(&buf_nodes_ready));
+  atomic_store(&nodes_ack_ready, 0);
+  atomic_store(&buf_nodes_ready, 0);
+  /* unlock threads */
+  // pthread_mutex_lock(&barrier_lock);
+  // pthread_cond_broadcast(&barrier_cond);
+  atomic_fetch_add(&next_quanta, QUANTA);
+  // pthread_mutex_unlock(&barrier_lock);
 }
 
 /* keeping this function as less as heavy as possible */
@@ -207,38 +270,31 @@ static void vcpu_insn_exec_before(unsigned int cpu_index, void *udata)
     // }
 
     /* increment before because `qflex_next_quanta` will reset it */
-    atomic_fetch_add(&threads_blocked_cnt, 1);
-    bool stop = true;
     /* I am the thread triggering the quanta */
     if (unlikely(value == next)) {
       /* here you should stop sending packets */
       atomic_store(&qflex_state->can_send, 0);
-      uint64_t s = atomic_fetch_add(&atomic_sum, 1) + 1;
-      stop = false;
+      atomic_store(&quanta_reached, 1);
+      printf("QUANTA REACHED %ld\n", value);
+      qflex_check_ready();
 
-      // printf("INC TO %ld\n", atomic_fetch_add(&atomic_sum, 1) + 1);
-      printf("SENDING %d - %d - %ld -> %ld (%ld)\n", curr_quanta,
-             nodes_at_quanta, value, atomic_load(&atomic_sum), s);
-      pthread_mutex_lock(&sync_lock);
-      qflex_send_quanta_termination(curr_quanta);
-      pthread_mutex_unlock(&sync_lock);
-      if (!qflex_next_quanta(false, true, -1)) {
-        // printf("PAUSED %ld\n", value);
-        // pthread_mutex_lock(&pause_lock);
-        qflex_state->vm_pause(NULL);
-        // pthread_mutex_unlock(&pause_lock);
-      }
-      else {
-        // printf("NOT BLOCKED\n");
-      }
+      // printf("SENDING %d - %d - %ld -> %ld (%ld)\n", curr_quanta,
+      //        nodes_at_quanta, value, atomic_load(&atomic_sum), s);
     }
     // printf("VALUE: %ld - %ld - %ld\n", value, atomic_load(&atomic_sum),
     //        atomic_load(&next_quanta));
     /* stop here waiting for synchronization */
     /* cond wait should not be busy waiting */
     // pthread_mutex_lock(&barrier_lock);
-    while (stop && value > atomic_load(&next_quanta)) {
+    uint64_t c = 0;
+    while (value > atomic_load(&next_quanta)) {
       // pthread_cond_wait(&barrier_cond, &barrier_lock);
+      usleep(1);
+      c++;
+      if (c > 100000000000000) {
+        printf("IM STUCKED\n");
+        usleep(100);
+      }
     }
     // atomic_fetch_sub(&threads_blocked_cnt, 1);
     // pthread_mutex_unlock(&barrier_lock);
@@ -248,13 +304,7 @@ static void vcpu_insn_exec_before(unsigned int cpu_index, void *udata)
     // }
   }
   // qemu_plugin_u64_add(insn_count, cpu_index, 1);
-  // printf("INC %d\n", value != next ? 1 : 0);
-  uint64_t s = atomic_fetch_add(&atomic_sum, value != next ? 1 : 0) +
-               (value != next ? 1 : 0);
-  if (s == next) {
-    printf("BINGO\n");
-    (void)qflex_send_self;
-  }
+  uint64_t s = atomic_fetch_add(&atomic_sum, 1) + 1;
 
   uint64_t n = atomic_load(&next_quanta);
   // printf("VALUE : %ld\n", s);
@@ -442,16 +492,21 @@ static void *qflex_server_open_thread(void *args)
       printf("select error");
     }
 
-    // If something happened on the master socket , then its an incoming
-    // connection
+    /* there is probably an error with the handling of my self when it comes to
+     * master server */
     if (FD_ISSET(serverfd, &readfds)) {
+      printf("SOMETHING SERVER\n");
+      /* if the server completed its job, stop here avoiding possible errors */
+      if (atomic_load(&qflex_state->can_count) == 1)
+        continue;
       if ((incoming_socket = accept(serverfd, (struct sockaddr *)&address,
                                     (socklen_t *)&addrlen)) < 0) {
         perror("accept");
         exit(EXIT_FAILURE);
       }
       /* read the header */
-      while ((valread = read(incoming_socket, &buf, sizeof(buf))) <= 0) {
+      if ((valread = read(incoming_socket, &buf, sizeof(buf))) <= 0) {
+        continue;
       }
 
       /* if we can count, accept new connections */
@@ -473,12 +528,13 @@ static void *qflex_server_open_thread(void *args)
       else if (buf == BT) {
         /* node 0 is the server */
         g_assert(node_id == 0);
-        if (++nodes_at_boot == n_nodes - 1) {
+        if (++nodes_at_boot == n_nodes) {
           atomic_store(&qflex_state->can_count, 1);
           int v = BBT;
           printf("EMULATION STARTS\n");
           for (int j = 0; j < n_nodes; ++j) {
-            write(nodes[j].fd_out, &v, sizeof(v));
+            if (j != node_id)
+              write(nodes[j].fd_out, &v, sizeof(v));
           }
         }
       }
@@ -494,6 +550,7 @@ static void *qflex_server_open_thread(void *args)
       sd = nodes[i].fd_in;
 
       if (FD_ISSET(sd, &readfds)) {
+        printf("SOMETHING NODES\n");
         // memset(buffer, 0, 1024);
         // Check if it was for closing , and also read the incoming message
         if ((valread = read(sd, &buf, sizeof(buf))) == 0) {
@@ -509,56 +566,52 @@ static void *qflex_server_open_thread(void *args)
           exit(EXIT_FAILURE);
         }
         else if (valread > 0) {
+          int remote = 0;
           switch (buf) {
-          /* is it quanta termination message ? */
-          case QT:
-            /* read the sent value */
+          case RDY:
             read(sd, &buf, sizeof(buf));
-            int remote_quanta = ntohl(buf);
-            printf("RECV %d from %d\n", remote_quanta, i);
-            pthread_mutex_lock(&sync_lock);
-            if (remote_quanta != curr_quanta) {
-              uint64_t bar = atomic_load(&barrier_sum);
-              uint64_t sum = atomic_load(&atomic_sum);
-              printf("GOT A PROBLEM HERE %d - %d -> %ld - %ld\n", remote_quanta,
-                     curr_quanta, bar, sum);
+            remote = htonl(buf);
+            /*
+             * situation when
+             * all the ARDY messages have been sent, but one of them
+             * is delay, so proc A receives them all, completes the
+             * synchronization, starts a new quanta and sends a RDY message with
+             * quanta_id+1;
+             * on the other hand proc B has not yet received all the ARDY, but
+             * receives the RDY with quanta_id + 1 from A
+             * we decide to bufferize the message since it is a faulty situation
+             */
+            /* atomic_load(&nodes_ready) == n_nodes -> so we already moved to
+             * the next quantum */
+            /* remote == quanta_id -> if we already moved to the next quantum
+             * then so it does the remote node */
+            if (remote == quanta_id && atomic_load(&nodes_ready) == n_nodes) {
+              printf("BUFF\n");
+              atomic_fetch_add(&buf_nodes_ready, 1);
+              /* early stop */
+              break;
             }
-            g_assert(remote_quanta == curr_quanta);
-            pthread_mutex_unlock(&sync_lock);
-            if (i == node_id) {
-              for (int j = 0; j < n_nodes; j++) {
-                if (j == node_id)
-                  continue;
-                /* to accept you I need to reach the end of my quanta */
-                if (to_ack_quanta[j])
-                  qflex_send_ack(j);
-              }
+            printf("RDY %d - %d from %d\n", remote, quanta_id, i);
+            g_assert(remote == quanta_id);
+            /* all nodes are ready */
+            if (atomic_fetch_add(&nodes_ready, 1) + 1 == n_nodes) {
+              /* ack */
+              qflex_send_ready(quanta_id, true);
+              qflex_move_to_next_quanta();
             }
-            else if (atomic_load(&atomic_sum) < atomic_load(&next_quanta)) {
-              to_ack_quanta[i] = true;
-            }
-            else {
-              qflex_send_ack(i);
-            }
-            if (i != node_id)
-              /* the nodes faced the barrier */
-              qflex_next_quanta(true, false, QT);
             break;
-            /* my quanta termination is completed only when I receive the ACK
-             * from all the other nodes */
-          case AQT:
-            pthread_mutex_lock(&sync_lock);
-            if (acked_quanta[i] == false)
-              n_acked_quanta++;
-            acked_quanta[i] = true;
-            printf("RECV AQT %d\n", i);
-            /* I received the ack from everyone */
-            if (n_acked_quanta == n_nodes - 1) {
-              pthread_mutex_unlock(&sync_lock);
-              qflex_next_quanta(true, false, AQT);
-            }
+          case ARDY:
+            read(sd, &buf, sizeof(buf));
+            remote = htonl(buf);
+            printf("ARDY for %d - %d from %d\n", remote, quanta_id, i);
+            if (atomic_load(&nodes_ready) == n_nodes)
+              g_assert(remote == quanta_id - 1);
             else
-              pthread_mutex_unlock(&sync_lock);
+              g_assert(remote == quanta_id);
+            /* now we are sure that everyone is at the same quanta */
+            if (atomic_fetch_add(&nodes_ack_ready, 1) + 1 == n_nodes) {
+              qflex_begin_of_quanta();
+            }
             break;
           case BBT:
             printf("EMULATION STARTS\n");
@@ -567,12 +620,16 @@ static void *qflex_server_open_thread(void *args)
           case ACK:
             printf("ACK\n");
             atomic_fetch_add(&qflex_state->pkt_acked, 1);
-            // qflex_next_quanta(false);
+            qflex_check_ready();
             break;
 
           default:
             printf("UNK %d\n", valread);
           }
+        }
+        else {
+          printf("[x] ERROR READING\n");
+          exit(EXIT_FAILURE);
         }
       }
     }
@@ -647,43 +704,39 @@ static int qflex_send_message(char *msg)
 
   return 0;
 }
-static int qflex_send_self(int msg)
-{
-  if (write(nodes[node_id].fd_out, &msg, sizeof(msg)) == -1) {
-    printf("Can not send number to %d\n", node_id);
-    exit(EXIT_FAILURE);
-  }
-  return 0;
-}
-static int qflex_send_quanta_termination(int n)
+static int qflex_send_ready(int n, bool is_ack)
 {
   int conv = htonl(n);
-  int type = QT;
+  int type = is_ack ? ARDY : RDY;
+
   for (int i = 0; i < n_nodes; i++) {
     // if (i == node_id)
     //   continue;
+    /* see
+     * https://stackoverflow.com/questions/855544/is-there-a-way-to-flush-a-posix-socket
+     */
+    int flag = 1;
+    setsockopt(nodes[i].fd_out, IPPROTO_TCP, TCP_NODELAY, (char *)&flag,
+               sizeof(int));
     int arr[] = {type, conv};
     if (write(nodes[i].fd_out, &arr, 2 * sizeof(int)) == -1) {
       printf("Can not send number to %d\n", i);
       exit(EXIT_FAILURE);
     }
+    flag = 0;
+    setsockopt(nodes[i].fd_out, IPPROTO_TCP, TCP_NODELAY, (char *)&flag,
+               sizeof(int));
   }
-  return 0;
-}
-static int qflex_send_ack(int dest_id)
-{
-  int type = AQT;
-  write(nodes[dest_id].fd_out, &type, sizeof(type));
+
   return 0;
 }
 static int qflex_notify_packet(int dest_id)
 {
   g_assert(dest_id >= -1 && dest_id < n_nodes);
-  return 0;
-  int msg = ACK;
   /* broadcast */
   if (dest_id == -1) {
     for (int i = 0; i < n_nodes; i++) {
+      int msg = ACK;
       if (write(nodes[i].fd_out, &msg, sizeof(msg)) == -1) {
         printf("Can not send number to %d\n", i);
         exit(EXIT_FAILURE);
@@ -691,6 +744,7 @@ static int qflex_notify_packet(int dest_id)
     }
   }
   else {
+    int msg = ACK;
     if (write(nodes[dest_id].fd_out, &msg, sizeof(msg)) == -1) {
       printf("Can not send number to %d\n", dest_id);
       exit(EXIT_FAILURE);
@@ -787,7 +841,7 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
   qflex_state->pkt_list_received = g_list_alloc();
   qflex_state->pkt_list_send = g_list_alloc();
   /* should be 0 at the beginning */
-  qflex_state->can_count = 1;
+  qflex_state->can_count = 0;
   qflex_state->can_send = 1;
   qflex_state->pkt_notify = qflex_notify_packet;
 
@@ -799,10 +853,8 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
 
   nodes_at_quanta = 0;
   next_quanta = QUANTA;
+  quanta_id = 0;
   qflex_config_load(config_path);
-  qflex_server_open();
-  qflex_clients_open();
-  (void)qflex_send_message;
 
   to_ack_quanta = (bool *)malloc(n_nodes * sizeof(bool));
   acked_quanta = (bool *)malloc(n_nodes * sizeof(bool));
@@ -812,16 +864,10 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
   }
   n_acked_quanta = 0;
   n_to_ack_quanta = 0;
-  // int c = 0;
-  // for (;;) {
-  //   // char *c1 = (char *)"ciao";
-  //   // char *c2 = (char *)"ciao2";
-  //   // (void)qflex_send_message(c1);
-  //   (void)qflex_send_number(c++);
-  //   sleep(3);
-  // }
-  // (void)qflex_send_message(c2);
-  // sleep(10);
-  // (void)qflex_send_message(c1);
+
+  qflex_server_open();
+  qflex_clients_open();
+  (void)qflex_send_message;
+  (void)qflex_next_quanta;
   return 0;
 }
