@@ -1,5 +1,6 @@
 #ifndef QEMU_TYPEDEFS_H
 #define QEMU_TYPEDEFS_H
+#include <bits/pthreadtypes.h>
 #include <stdatomic.h>
 
 /*
@@ -174,7 +175,20 @@ struct QflexPluginState {
                           beginning of the next quanta */
   _Atomic uint64_t can_send; /* decide whether the we can send out packekts (in
                                 reduction phase we can not) */
+  uint64_t time_offset;      /* time "lost" during synchronization (from quanta
+                                reached until synchronization completed) */
 
+  /* locks for synchronization: pthread_mutex_t */
+  pthread_mutex_t lock1;
+  pthread_mutex_t lock2;
+  pthread_mutex_t lock3;
+  pthread_mutex_t *locks;
+
+  /* for debug purposes */
+  void *dummy;
+
+  uint64_t (*get_qflex_clock)(
+      void); /* hook to the plugin to return the current clock */
   uint64_t (*get_qflex_icount)(
       void); /* hook to the plugin to return the current instruction count */
   int (*vm_pause)(void *);   /* pause the virtual clock */
@@ -184,6 +198,8 @@ struct QflexPluginState {
   int (*pkt_receive)(int); /* deliver all packets received during the quanta */
   int (*pkt_send)(
       int); /* send all packets not sent because in reduction phase */
+  int (*send_boot)(void); /* signal the central server that we are to join the
+                             multinode simulation */
 };
 
 struct QflexPacket {

@@ -27,6 +27,7 @@
 #include "qemu/typedefs.h"
 #include "tap_int.h"
 
+#include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
@@ -141,29 +142,91 @@ static int tap_packet_send_all(int quanta)
   return 0;
 }
 
+static int mac_to_node_id(int mac) { return 0; }
 static bool qflex_dest_to_notify(uint8_t *buf, int size, int *dest_id)
 {
+  (void)mac_to_node_id;
+  *dest_id = -1;
   bool is_broadcast = true;
+  char v = 0;
   for (int i = 0; i < 6; i++) {
-    // printf("%x ", *(buf + i));
+    printf("%x ", *(buf + i));
     if (*(buf + i) != 0xff) {
       is_broadcast = false;
       break;
     }
+    if (i == 3)
+      v = *(buf + i);
   }
-  *dest_id = -1;
-  bool to_notify = is_broadcast;
-  if (!is_broadcast && size > 41) {
-    for (int i = 38; i < 42; i++) {
-      printf("%x ", *(buf + i));
-    }
-    printf("\n");
-    *dest_id = *(buf + 41) - 100;
-    to_notify |= *dest_id >= 0;
+  printf("\n");
+  if (is_broadcast)
+    return true;
+
+  *dest_id = v - 100;
+
+  return *dest_id >= 0;
+}
+
+static void tap_send_completed(NetClientState *nc, ssize_t len)
+{
+  TAPState *s = DO_UPCAST(TAPState, nc, nc);
+  tap_read_poll(s, true);
+}
+/* TODO giami: */
+static void tap_receive_packet(struct QflexPacket *pkt)
+{
+  if (pkt == NULL)
+    return;
+
+  TAPState *s = pkt->tap_state;
+  uint8_t *buf = pkt->buf;
+  int size = pkt->size;
+  CPUState *cpu;
+  CPU_FOREACH(cpu)
+  {
+    if (cpu != NULL)
+      break;
+  }
+  if (cpu == NULL || cpu->qflex_state == NULL ||
+      cpu->qflex_state->pkt_notify == NULL) {
+    printf("SOMETHING IS WRONG\n");
+    g_assert(false);
   }
 
-  return to_notify;
+  size = qemu_send_packet_async(&(s->nc), buf, size, tap_send_completed);
+  if (size == 0) {
+    printf("TAP NOT RECEIVE %d\n", size);
+    tap_read_poll(s, false);
+  }
 }
+
+/* TODO giami: */
+static int tap_receive_packet_all(int quanta)
+{
+  (void)quanta;
+  CPUState *cpu;
+  CPU_FOREACH(cpu)
+  {
+    if (cpu != NULL)
+      break;
+  }
+  if (cpu == NULL || cpu->qflex_state == NULL)
+    return -1;
+  GList *pkt_list = ((GList *)cpu->qflex_state->pkt_list_received);
+  g_list_foreach(pkt_list, (GFunc)tap_receive_packet, NULL);
+  g_list_free(pkt_list);
+  cpu->qflex_state->pkt_list_received = g_list_alloc();
+  return 0;
+}
+
+static bool tap_qflex_filter(uint8_t *buf, ssize_t size)
+{
+  if (size < 24)
+    return false;
+  /* ipv4 (0x8000) and tcp (0x6) */
+  return (buf[12] == 0x08 && buf[13] == 0x00 && buf[23] == 0x6);
+}
+
 static ssize_t tap_write_packet(TAPState *s, const struct iovec *iov,
                                 int iovcnt)
 {
@@ -180,35 +243,74 @@ static ssize_t tap_write_packet(TAPState *s, const struct iovec *iov,
   }
   if (cpu->qflex_state->pkt_send == NULL)
     cpu->qflex_state->pkt_send = tap_packet_send_all;
+  if (cpu->qflex_state->pkt_receive == NULL)
+    cpu->qflex_state->pkt_receive = tap_receive_packet_all;
+  int b = sizeof(struct virtio_net_hdr) + 2;
+  /* raw packet */
+  if (s->host_vnet_hdr_len && !s->using_vnet_hdr) {
+    b = 0;
+  }
+  ssize_t size = iov->iov_len;
   /* can not send */
-  if (cpu->qflex_state->can_send == 0) {
+  /* from the moment we find that we can send, we need to stop anything from
+   * happing e.g. no quanta update, no resets,
+   * because let's say
+   * - can_send == 1 so we can send, current thread stops (A)
+   * - insn_exec_before thread starts (B), quanta has been reached
+   * - B continues and send 0 packets sent;
+   * - A continues and increment packets sent to 1 (here problem);
+   * - B continues and reset packets sent to 0;
+   * - so we lost a packet somewhere
+   * */
+  pthread_mutex_lock(&cpu->qflex_state->lock1);
+  if (atomic_load(&cpu->qflex_state->can_send) == 0) {
+    pthread_mutex_unlock(&cpu->qflex_state->lock1);
     // struct QflexIOV *pkt = g_new0(struct QflexIOV, 1);
     // pkt->tap_state = s;
     // pkt->iov = (struct iovec *)iov;
     // pkt->iovcnt = iovcnt;
     // pkt_list = g_list_append(pkt_list, pkt);
-    // printf("BLOCK SEND\n");
+    printf("BLOCK SEND %ld\n", size);
+    for (int i = b; i < iov->iov_len; i++) {
+      printf("%x ", *(uint8_t *)(iov->iov_base + i));
+    }
+    printf("\n");
     tap_write_poll(s, true);
     return 0;
   }
-  if (cpu->qflex_state->can_count == 1) {
-    int b = sizeof(struct virtio_net_hdr) + 2;
-    int dest_id = -1;
-    if (qflex_dest_to_notify((uint8_t *)(iov->iov_base + b), iov->iov_len - b,
-                             &dest_id)) {
-      atomic_fetch_add(&cpu->qflex_state->pkt_sent, 1);
-      printf("TAP WRITE PACKET %ld\n",
-             iov->iov_len - sizeof(struct virtio_net_hdr));
-      printf("DEST ID %d\n", dest_id);
-    }
-    printf("\n");
-  }
+  // printf("TYPE %x\n", *(uint8_t *)(iov->iov_base + b + 24));
+  // for (int i = b; i < iov->iov_len; i++) {
+  //   printf("%x ", *(uint8_t *)(iov->iov_base + i));
+  // }
+  // printf("----------------\n");
 
   len = RETRY_ON_EINTR(writev(s->fd, iov, iovcnt));
 
   if (len == -1 && errno == EAGAIN) {
+    pthread_mutex_unlock(&cpu->qflex_state->lock1);
+    printf("NOT SENT\n");
     tap_write_poll(s, true);
     return 0;
+  }
+  else {
+    if (cpu->qflex_state->can_count == 0) {
+      cpu->qflex_state->send_boot();
+    }
+    /* incremenet only in case the send has been successful */
+    if (cpu->qflex_state->can_count == 1 &&
+        tap_qflex_filter((uint8_t *)(iov->iov_base + b), size)) {
+      atomic_fetch_add(&cpu->qflex_state->pkt_sent, 1);
+      /* release as soon as possible */
+      pthread_mutex_unlock(&cpu->qflex_state->lock1);
+      printf("TAP WRITE %ld - %d\n", size, *(int *)cpu->qflex_state->dummy);
+      for (int i = b; i < iov->iov_len; i++) {
+        printf("%x ", *(uint8_t *)(iov->iov_base + i));
+      }
+      printf("\n");
+    }
+    else {
+      pthread_mutex_unlock(&cpu->qflex_state->lock1);
+    }
   }
 
   return len;
@@ -261,6 +363,7 @@ static ssize_t tap_receive(NetClientState *nc, const uint8_t *buf, size_t size)
   struct iovec iov[1];
 
   if (s->host_vnet_hdr_len && !s->using_vnet_hdr) {
+    printf("THATS FUCKING RAW\n\n\n");
     return tap_receive_raw(nc, buf, size);
   }
 
@@ -278,59 +381,6 @@ ssize_t tap_read_packet(int tapfd, uint8_t *buf, int maxlen)
 }
 #endif
 
-static void tap_send_completed(NetClientState *nc, ssize_t len)
-{
-  TAPState *s = DO_UPCAST(TAPState, nc, nc);
-  tap_read_poll(s, true);
-}
-
-/* TODO giami: */
-static void tap_receive_packet(struct QflexPacket *pkt)
-{
-  if (pkt == NULL)
-    return;
-  TAPState *s = pkt->tap_state;
-  uint8_t *buf = pkt->buf;
-  int size = pkt->size;
-  CPUState *cpu;
-  CPU_FOREACH(cpu)
-  {
-    if (cpu != NULL)
-      break;
-  }
-  if (cpu == NULL || cpu->qflex_state == NULL ||
-      cpu->qflex_state->pkt_notify == NULL) {
-    printf("SOMETHING IS WRONG\n");
-    g_assert(false);
-  }
-
-  size = qemu_send_packet_async(&(s->nc), buf, size, tap_send_completed);
-  if (size == 0) {
-    tap_read_poll(s, false);
-  }
-}
-
-/* TODO giami: */
-static int tap_packet_receive_all(int quanta)
-{
-  (void)quanta;
-  CPUState *cpu;
-  CPU_FOREACH(cpu)
-  {
-    if (cpu != NULL)
-      break;
-  }
-  if (cpu == NULL || cpu->qflex_state == NULL)
-    return -1;
-  GList *pkt_list = ((GList *)cpu->qflex_state->pkt_list_received);
-  g_list_foreach(pkt_list, (GFunc)tap_receive_packet, NULL);
-  g_list_free(pkt_list);
-  cpu->qflex_state->pkt_list_received = g_list_alloc();
-  atomic_store(&cpu->qflex_state->pkt_received, 0);
-  atomic_store(&cpu->qflex_state->pkt_sent, 0);
-  return 0;
-}
-
 /* TODO giami: */
 static void tap_send(void *opaque)
 {
@@ -340,15 +390,25 @@ static void tap_send(void *opaque)
 
   CPUState *cpu;
   CPU_FOREACH(cpu) { break; }
+  if (cpu->qflex_state->pkt_send == NULL)
+    cpu->qflex_state->pkt_send = tap_packet_send_all;
   if (cpu->qflex_state->pkt_receive == NULL)
-    cpu->qflex_state->pkt_receive = tap_packet_receive_all;
+    cpu->qflex_state->pkt_receive = tap_receive_packet_all;
 
   GList *pkt_list = ((GList *)cpu->qflex_state->pkt_list_received);
 
-  // g_list_foreach(pkt_list, (GFunc)tap_send_packet, NULL);
-  // g_list_free(pkt_list);
-  // cpu->qflex_state->pkt_list = g_list_alloc();
-
+  /*
+   * A reads a tap packet at quanta 1, and pause
+   * B reaches quanta and send ready
+   * B receives the ardy from the server so the other nodes
+   * can move to the quanta 2
+   * A sends the packet with quanta 1 inside
+   *
+   * ALSO
+   *
+   * I could receive a packet from quanta 2, but still waiting
+   * for ardy of quanta 1, so either I queue packets of the next quanta
+   */
   while (true) {
     uint8_t *buf = s->buf;
     uint8_t min_pkt[ETH_ZLEN];
@@ -358,6 +418,7 @@ static void tap_send(void *opaque)
     if (size <= 0) {
       break;
     }
+    pthread_mutex_lock(&cpu->qflex_state->lock2);
 
     if (s->host_vnet_hdr_len && !s->using_vnet_hdr) {
       buf += s->host_vnet_hdr_len;
@@ -373,7 +434,10 @@ static void tap_send(void *opaque)
 
     /* TODO giammi: */
     /* if init has been completed we should stop receiving packets at will */
-    if (atomic_load(&cpu->qflex_state->can_count) == 1) {
+    int b = sizeof(struct virtio_net_hdr) + 2;
+    if (atomic_load(&cpu->qflex_state->can_count) == 1 &&
+        tap_qflex_filter(buf + b, size - b)) {
+      printf("TAP READ %d - %d\n", size - b, *(int *)cpu->qflex_state->dummy);
       atomic_fetch_add(&cpu->qflex_state->pkt_received, 1);
       struct QflexPacket *pkt = g_new0(struct QflexPacket, 1);
       pkt->tap_state = opaque;
@@ -383,15 +447,20 @@ static void tap_send(void *opaque)
       if (pkt == NULL) {
         printf("NULL\n");
       }
-      // printf("SIZE %ld\n", size - sizeof(struct virtio_net_hdr));
-      int dest_id = -1;
-      if (qflex_dest_to_notify(buf, size, &dest_id)) {
-        printf("DEST ID %d\n", dest_id);
-        cpu->qflex_state->pkt_notify(dest_id);
+      (void)qflex_dest_to_notify;
+      for (int i = b; i < size; i++) {
+        printf("%x ", *(buf + i));
       }
-      /* TODO giammi: */
-      printf("TAP READ PACKET %ld\n", size - sizeof(struct virtio_net_hdr));
+      printf("\n");
+      // if (qflex_dest_to_notify(buf + b, size - b, &dest_id)) {
+      //   printf("DEST ID %d\n", dest_id);
+      cpu->qflex_state->pkt_notify(-1);
+      pthread_mutex_unlock(&cpu->qflex_state->lock2);
+      // }
       continue;
+    }
+    else {
+      pthread_mutex_unlock(&cpu->qflex_state->lock2);
     }
 
     size = qemu_send_packet_async(&s->nc, buf, size, tap_send_completed);

@@ -45,11 +45,11 @@
  */
 
 typedef enum {
-    QEMU_CLOCK_REALTIME = 0,
-    QEMU_CLOCK_VIRTUAL = 1,
-    QEMU_CLOCK_HOST = 2,
-    QEMU_CLOCK_VIRTUAL_RT = 3,
-    QEMU_CLOCK_MAX
+  QEMU_CLOCK_REALTIME = 0,
+  QEMU_CLOCK_VIRTUAL = 1,
+  QEMU_CLOCK_HOST = 2,
+  QEMU_CLOCK_VIRTUAL_RT = 3,
+  QEMU_CLOCK_MAX
 } QEMUClockType;
 
 /**
@@ -70,25 +70,25 @@ typedef enum {
  */
 
 #define QEMU_TIMER_ATTR_EXTERNAL ((int)BIT(0))
-#define QEMU_TIMER_ATTR_ALL      0xffffffff
+#define QEMU_TIMER_ATTR_ALL 0xffffffff
 
 typedef struct QEMUTimerList QEMUTimerList;
 
 struct QEMUTimerListGroup {
-    QEMUTimerList *tl[QEMU_CLOCK_MAX];
+  QEMUTimerList *tl[QEMU_CLOCK_MAX];
 };
 
 typedef void QEMUTimerCB(void *opaque);
 typedef void QEMUTimerListNotifyCB(void *opaque, QEMUClockType type);
 
 struct QEMUTimer {
-    int64_t expire_time;        /* in nanoseconds */
-    QEMUTimerList *timer_list;
-    QEMUTimerCB *cb;
-    void *opaque;
-    QEMUTimer *next;
-    int attributes;
-    int scale;
+  int64_t expire_time; /* in nanoseconds */
+  QEMUTimerList *timer_list;
+  QEMUTimerCB *cb;
+  void *opaque;
+  QEMUTimer *next;
+  int attributes;
+  int scale;
 };
 
 extern QEMUTimerListGroup main_loop_tlg;
@@ -115,7 +115,7 @@ int64_t qemu_clock_get_ns(QEMUClockType type);
  */
 static inline int64_t qemu_clock_get_ms(QEMUClockType type)
 {
-    return qemu_clock_get_ns(type) / SCALE_MS;
+  return qemu_clock_get_ns(type) / SCALE_MS;
 }
 
 /**
@@ -129,7 +129,7 @@ static inline int64_t qemu_clock_get_ms(QEMUClockType type)
  */
 static inline int64_t qemu_clock_get_us(QEMUClockType type)
 {
-    return qemu_clock_get_ns(type) / SCALE_US;
+  return qemu_clock_get_ns(type) / SCALE_US;
 }
 
 /**
@@ -245,7 +245,6 @@ bool qemu_clock_run_timers(QEMUClockType type);
  */
 bool qemu_clock_run_all_timers(void);
 
-
 /*
  * QEMUTimerList
  */
@@ -261,8 +260,8 @@ bool qemu_clock_run_all_timers(void);
  *
  * Returns: a pointer to the QEMUTimerList created
  */
-QEMUTimerList *timerlist_new(QEMUClockType type,
-                             QEMUTimerListNotifyCB *cb, void *opaque);
+QEMUTimerList *timerlist_new(QEMUClockType type, QEMUTimerListNotifyCB *cb,
+                             void *opaque);
 
 /**
  * timerlist_free:
@@ -357,8 +356,8 @@ void timerlist_notify(QEMUTimerList *timer_list);
  * list is modified. If @cb is specified as null, qemu_notify()
  * is used instead.
  */
-void timerlistgroup_init(QEMUTimerListGroup *tlg,
-                         QEMUTimerListNotifyCB *cb, void *opaque);
+void timerlistgroup_init(QEMUTimerListGroup *tlg, QEMUTimerListNotifyCB *cb,
+                         void *opaque);
 
 /**
  * timerlistgroup_deinit:
@@ -416,9 +415,8 @@ int64_t timerlistgroup_deadline_ns(QEMUTimerListGroup *tlg);
  * You need not call an explicit deinit call. Simply make
  * sure it is not on a list with timer_del.
  */
-void timer_init_full(QEMUTimer *ts,
-                     QEMUTimerListGroup *timer_list_group, QEMUClockType type,
-                     int scale, int attributes,
+void timer_init_full(QEMUTimer *ts, QEMUTimerListGroup *timer_list_group,
+                     QEMUClockType type, int scale, int attributes,
                      QEMUTimerCB *cb, void *opaque);
 
 /**
@@ -436,7 +434,7 @@ void timer_init_full(QEMUTimer *ts,
 static inline void timer_init(QEMUTimer *ts, QEMUClockType type, int scale,
                               QEMUTimerCB *cb, void *opaque)
 {
-    timer_init_full(ts, NULL, type, scale, 0, cb, opaque);
+  timer_init_full(ts, NULL, type, scale, 0, cb, opaque);
 }
 
 /**
@@ -453,7 +451,7 @@ static inline void timer_init(QEMUTimer *ts, QEMUClockType type, int scale,
 static inline void timer_init_ns(QEMUTimer *ts, QEMUClockType type,
                                  QEMUTimerCB *cb, void *opaque)
 {
-    timer_init(ts, type, SCALE_NS, cb, opaque);
+  timer_init(ts, type, SCALE_NS, cb, opaque);
 }
 
 /**
@@ -470,7 +468,7 @@ static inline void timer_init_ns(QEMUTimer *ts, QEMUClockType type,
 static inline void timer_init_us(QEMUTimer *ts, QEMUClockType type,
                                  QEMUTimerCB *cb, void *opaque)
 {
-    timer_init(ts, type, SCALE_US, cb, opaque);
+  timer_init(ts, type, SCALE_US, cb, opaque);
 }
 
 /**
@@ -487,7 +485,7 @@ static inline void timer_init_us(QEMUTimer *ts, QEMUClockType type,
 static inline void timer_init_ms(QEMUTimer *ts, QEMUClockType type,
                                  QEMUTimerCB *cb, void *opaque)
 {
-    timer_init(ts, type, SCALE_MS, cb, opaque);
+  timer_init(ts, type, SCALE_MS, cb, opaque);
 }
 
 /**
@@ -516,13 +514,13 @@ static inline void timer_init_ms(QEMUTimer *ts, QEMUClockType type,
  * Returns: a pointer to the timer
  */
 static inline QEMUTimer *timer_new_full(QEMUTimerListGroup *timer_list_group,
-                                        QEMUClockType type,
-                                        int scale, int attributes,
-                                        QEMUTimerCB *cb, void *opaque)
+                                        QEMUClockType type, int scale,
+                                        int attributes, QEMUTimerCB *cb,
+                                        void *opaque)
 {
-    QEMUTimer *ts = g_new0(QEMUTimer, 1);
-    timer_init_full(ts, timer_list_group, type, scale, attributes, cb, opaque);
-    return ts;
+  QEMUTimer *ts = g_new0(QEMUTimer, 1);
+  timer_init_full(ts, timer_list_group, type, scale, attributes, cb, opaque);
+  return ts;
 }
 
 /**
@@ -541,7 +539,7 @@ static inline QEMUTimer *timer_new_full(QEMUTimerListGroup *timer_list_group,
 static inline QEMUTimer *timer_new(QEMUClockType type, int scale,
                                    QEMUTimerCB *cb, void *opaque)
 {
-    return timer_new_full(NULL, type, scale, 0, cb, opaque);
+  return timer_new_full(NULL, type, scale, 0, cb, opaque);
 }
 
 /**
@@ -559,7 +557,7 @@ static inline QEMUTimer *timer_new(QEMUClockType type, int scale,
 static inline QEMUTimer *timer_new_ns(QEMUClockType type, QEMUTimerCB *cb,
                                       void *opaque)
 {
-    return timer_new(type, SCALE_NS, cb, opaque);
+  return timer_new(type, SCALE_NS, cb, opaque);
 }
 
 /**
@@ -577,7 +575,7 @@ static inline QEMUTimer *timer_new_ns(QEMUClockType type, QEMUTimerCB *cb,
 static inline QEMUTimer *timer_new_us(QEMUClockType type, QEMUTimerCB *cb,
                                       void *opaque)
 {
-    return timer_new(type, SCALE_US, cb, opaque);
+  return timer_new(type, SCALE_US, cb, opaque);
 }
 
 /**
@@ -595,7 +593,7 @@ static inline QEMUTimer *timer_new_us(QEMUClockType type, QEMUTimerCB *cb,
 static inline QEMUTimer *timer_new_ms(QEMUClockType type, QEMUTimerCB *cb,
                                       void *opaque)
 {
-    return timer_new(type, SCALE_MS, cb, opaque);
+  return timer_new(type, SCALE_MS, cb, opaque);
 }
 
 /**
@@ -629,10 +627,10 @@ void timer_del(QEMUTimer *ts);
  */
 static inline void timer_free(QEMUTimer *ts)
 {
-    if (ts) {
-        timer_del(ts);
-        g_free(ts);
-    }
+  if (ts) {
+    timer_del(ts);
+    g_free(ts);
+  }
 }
 
 /**
@@ -774,11 +772,11 @@ int qemu_poll_ns(GPollFD *fds, guint nfds, int64_t timeout);
  */
 static inline int64_t qemu_soonest_timeout(int64_t timeout1, int64_t timeout2)
 {
-    /* we can abuse the fact that -1 (which means infinite) is a maximal
-     * value when cast to unsigned. As this is disgusting, it's kept in
-     * one inline function.
-     */
-    return ((uint64_t) timeout1 < (uint64_t) timeout2) ? timeout1 : timeout2;
+  /* we can abuse the fact that -1 (which means infinite) is a maximal
+   * value when cast to unsigned. As this is disgusting, it's kept in
+   * one inline function.
+   */
+  return ((uint64_t)timeout1 < (uint64_t)timeout2) ? timeout1 : timeout2;
 }
 
 /**
@@ -790,11 +788,11 @@ void init_clocks(QEMUTimerListNotifyCB *notify_cb);
 
 static inline int64_t get_max_clock_jump(void)
 {
-    /* This should be small enough to prevent excessive interrupts from being
-     * generated by the RTC on clock jumps, but large enough to avoid frequent
-     * unnecessary resets in idle VMs.
-     */
-    return 60 * NANOSECONDS_PER_SECOND;
+  /* This should be small enough to prevent excessive interrupts from being
+   * generated by the RTC on clock jumps, but large enough to avoid frequent
+   * unnecessary resets in idle VMs.
+   */
+  return 60 * NANOSECONDS_PER_SECOND;
 }
 
 /*
@@ -804,10 +802,10 @@ static inline int64_t get_max_clock_jump(void)
 /* get host real time in nanosecond */
 static inline int64_t get_clock_realtime(void)
 {
-    struct timeval tv;
+  struct timeval tv;
 
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000000LL + (tv.tv_usec * 1000);
+  gettimeofday(&tv, NULL);
+  return tv.tv_sec * 1000000000LL + (tv.tv_usec * 1000);
 }
 
 extern int64_t clock_start;
@@ -820,9 +818,9 @@ extern int64_t clock_freq;
 
 static inline int64_t get_clock(void)
 {
-    LARGE_INTEGER ti;
-    QueryPerformanceCounter(&ti);
-    return muldiv64(ti.QuadPart, NANOSECONDS_PER_SECOND, clock_freq);
+  LARGE_INTEGER ti;
+  QueryPerformanceCounter(&ti);
+  return muldiv64(ti.QuadPart, NANOSECONDS_PER_SECOND, clock_freq);
 }
 
 #else
@@ -831,15 +829,16 @@ extern int use_rt_clock;
 
 static inline int64_t get_clock(void)
 {
-    if (use_rt_clock) {
-        struct timespec ts;
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-        return ts.tv_sec * 1000000000LL + ts.tv_nsec;
-    } else {
-        /* XXX: using gettimeofday leads to problems if the date
-           changes, so it should be avoided. */
-        return get_clock_realtime();
-    }
+  if (use_rt_clock) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000000000LL + ts.tv_nsec;
+  }
+  else {
+    /* XXX: using gettimeofday leads to problems if the date
+       changes, so it should be avoided. */
+    return get_clock_realtime();
+  }
 }
 #endif
 
@@ -850,93 +849,95 @@ static inline int64_t get_clock(void)
 
 static inline int64_t cpu_get_host_ticks(void)
 {
-    int64_t retval;
+  int64_t retval;
 #ifdef _ARCH_PPC64
-    /* This reads timebase in one 64bit go and includes Cell workaround from:
-       http://ozlabs.org/pipermail/linuxppc-dev/2006-October/027052.html
-    */
-    __asm__ __volatile__ ("mftb    %0\n\t"
-                          "cmpwi   %0,0\n\t"
-                          "beq-    $-8"
-                          : "=r" (retval));
+  /* This reads timebase in one 64bit go and includes Cell workaround from:
+     http://ozlabs.org/pipermail/linuxppc-dev/2006-October/027052.html
+  */
+  __asm__ __volatile__("mftb    %0\n\t"
+                       "cmpwi   %0,0\n\t"
+                       "beq-    $-8"
+                       : "=r"(retval));
 #else
-    /* http://ozlabs.org/pipermail/linuxppc-dev/1999-October/003889.html */
-    unsigned long junk;
-    __asm__ __volatile__ ("mfspr   %1,269\n\t"  /* mftbu */
-                          "mfspr   %L0,268\n\t" /* mftb */
-                          "mfspr   %0,269\n\t"  /* mftbu */
-                          "cmpw    %0,%1\n\t"
-                          "bne     $-16"
-                          : "=r" (retval), "=r" (junk));
+  /* http://ozlabs.org/pipermail/linuxppc-dev/1999-October/003889.html */
+  unsigned long junk;
+  __asm__ __volatile__("mfspr   %1,269\n\t"  /* mftbu */
+                       "mfspr   %L0,268\n\t" /* mftb */
+                       "mfspr   %0,269\n\t"  /* mftbu */
+                       "cmpw    %0,%1\n\t"
+                       "bne     $-16"
+                       : "=r"(retval), "=r"(junk));
 #endif
-    return retval;
+  return retval;
 }
 
 #elif defined(__i386__)
 
 static inline int64_t cpu_get_host_ticks(void)
 {
-    int64_t val;
-    asm volatile ("rdtsc" : "=A" (val));
-    return val;
+  int64_t val;
+  asm volatile("rdtsc" : "=A"(val));
+  return val;
 }
 
 #elif defined(__x86_64__)
 
 static inline int64_t cpu_get_host_ticks(void)
 {
-    uint32_t low,high;
-    int64_t val;
-    asm volatile("rdtsc" : "=a" (low), "=d" (high));
-    val = high;
-    val <<= 32;
-    val |= low;
-    return val;
+  uint32_t low, high;
+  int64_t val;
+  asm volatile("rdtsc" : "=a"(low), "=d"(high));
+  val = high;
+  val <<= 32;
+  val |= low;
+  return val;
 }
 
 #elif defined(__hppa__)
 
 static inline int64_t cpu_get_host_ticks(void)
 {
-    int val;
-    asm volatile ("mfctl %%cr16, %0" : "=r"(val));
-    return val;
+  int val;
+  asm volatile("mfctl %%cr16, %0" : "=r"(val));
+  return val;
 }
 
 #elif defined(__s390__)
 
 static inline int64_t cpu_get_host_ticks(void)
 {
-    int64_t val;
-    asm volatile("stck 0(%1)" : "=m" (val) : "a" (&val) : "cc");
-    return val;
+  int64_t val;
+  asm volatile("stck 0(%1)" : "=m"(val) : "a"(&val) : "cc");
+  return val;
 }
 
 #elif defined(__sparc__)
 
-static inline int64_t cpu_get_host_ticks (void)
+static inline int64_t cpu_get_host_ticks(void)
 {
 #if defined(_LP64)
-    uint64_t        rval;
-    asm volatile("rd %%tick,%0" : "=r"(rval));
-    return rval;
+  uint64_t rval;
+  asm volatile("rd %%tick,%0" : "=r"(rval));
+  return rval;
 #else
-    /* We need an %o or %g register for this.  For recent enough gcc
-       there is an "h" constraint for that.  Don't bother with that.  */
-    union {
-        uint64_t i64;
-        struct {
-            uint32_t high;
-            uint32_t low;
-        }       i32;
-    } rval;
-    asm volatile("rd %%tick,%%g1; srlx %%g1,32,%0; mov %%g1,%1"
-                 : "=r"(rval.i32.high), "=r"(rval.i32.low) : : "g1");
-    return rval.i64;
+  /* We need an %o or %g register for this.  For recent enough gcc
+     there is an "h" constraint for that.  Don't bother with that.  */
+  union {
+    uint64_t i64;
+    struct {
+      uint32_t high;
+      uint32_t low;
+    } i32;
+  } rval;
+  asm volatile("rd %%tick,%%g1; srlx %%g1,32,%0; mov %%g1,%1"
+               : "=r"(rval.i32.high), "=r"(rval.i32.low)
+               :
+               : "g1");
+  return rval.i64;
 #endif
 }
 
-#elif defined(__mips__) && \
+#elif defined(__mips__) &&                                                     \
     ((defined(__mips_isa_rev) && __mips_isa_rev >= 2) || defined(__linux__))
 /*
  * binutils wants to use rdhwr only on mips32r2
@@ -944,71 +945,69 @@ static inline int64_t cpu_get_host_ticks (void)
  * to use it.
  *
  */
-#define MIPS_RDHWR(rd, value) {                         \
-        __asm__ __volatile__ (".set   push\n\t"         \
-                              ".set mips32r2\n\t"       \
-                              "rdhwr  %0, "rd"\n\t"     \
-                              ".set   pop"              \
-                              : "=r" (value));          \
-    }
+#define MIPS_RDHWR(rd, value)                                                  \
+  {                                                                            \
+    __asm__ __volatile__(".set   push\n\t"                                     \
+                         ".set mips32r2\n\t"                                   \
+                         "rdhwr  %0, " rd "\n\t"                               \
+                         ".set   pop"                                          \
+                         : "=r"(value));                                       \
+  }
 
 static inline int64_t cpu_get_host_ticks(void)
 {
-    /* On kernels >= 2.6.25 rdhwr <reg>, $2 and $3 are emulated */
-    uint32_t count;
-    static uint32_t cyc_per_count = 0;
+  /* On kernels >= 2.6.25 rdhwr <reg>, $2 and $3 are emulated */
+  uint32_t count;
+  static uint32_t cyc_per_count = 0;
 
-    if (!cyc_per_count) {
-        MIPS_RDHWR("$3", cyc_per_count);
-    }
+  if (!cyc_per_count) {
+    MIPS_RDHWR("$3", cyc_per_count);
+  }
 
-    MIPS_RDHWR("$2", count);
-    return (int64_t)(count * cyc_per_count);
+  MIPS_RDHWR("$2", count);
+  return (int64_t)(count * cyc_per_count);
 }
 
 #elif defined(__alpha__)
 
 static inline int64_t cpu_get_host_ticks(void)
 {
-    uint64_t cc;
-    uint32_t cur, ofs;
+  uint64_t cc;
+  uint32_t cur, ofs;
 
-    asm volatile("rpcc %0" : "=r"(cc));
-    cur = cc;
-    ofs = cc >> 32;
-    return cur - ofs;
+  asm volatile("rpcc %0" : "=r"(cc));
+  cur = cc;
+  ofs = cc >> 32;
+  return cur - ofs;
 }
 
 #elif defined(__riscv) && __riscv_xlen == 32
 static inline int64_t cpu_get_host_ticks(void)
 {
-    uint32_t lo, hi, tmph;
-    do {
-        asm volatile("RDTIMEH %0\n\t"
-                     "RDTIME %1\n\t"
-                     "RDTIMEH %2"
-                     : "=r"(hi), "=r"(lo), "=r"(tmph));
-    } while (unlikely(tmph != hi));
-    return lo | (uint64_t)hi << 32;
+  uint32_t lo, hi, tmph;
+  do {
+    asm volatile("RDTIMEH %0\n\t"
+                 "RDTIME %1\n\t"
+                 "RDTIMEH %2"
+                 : "=r"(hi), "=r"(lo), "=r"(tmph));
+  } while (unlikely(tmph != hi));
+  return lo | (uint64_t)hi << 32;
 }
 
 #elif defined(__riscv) && __riscv_xlen > 32
 static inline int64_t cpu_get_host_ticks(void)
 {
-    int64_t val;
+  int64_t val;
 
-    asm volatile("RDTIME %0" : "=r"(val));
-    return val;
+  asm volatile("RDTIME %0" : "=r"(val));
+  return val;
 }
 
 #else
 /* The host CPU doesn't have an easily accessible cycle counter.
    Just return a monotonically increasing value.  This will be
    totally wrong, but hopefully better than nothing.  */
-static inline int64_t cpu_get_host_ticks(void)
-{
-    return get_clock();
-}
+static inline int64_t cpu_get_host_ticks(void) { return get_clock(); }
 #endif
 
 #endif

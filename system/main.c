@@ -26,6 +26,7 @@
 #include "qemu-main.h"
 #include "qemu/plugin-event.h"
 #include "qemu/timer.h"
+#include "sysemu/cpu-timers.h"
 #include "sysemu/sysemu.h"
 #include "../accel/tcg/internal-common.h"
 #include "tcg/tcg.h"
@@ -39,10 +40,7 @@ static QEMUTimer *test_insn_trigger;
 static int64_t now, now_500;
 // a second
 static int64_t insn_cycles = 500000000;
-// static int64_t cycles = 1000000000;
-static int64_t cycles = 2000000000;
-// static int64_t cycles = 500000000;
-// static int64_t cycles = 20000000;
+static int64_t cycles = 5000000000;
 static int64_t times = 0;
 
 struct timeval t1, t2, t1_500;
@@ -52,20 +50,21 @@ uint64_t qflex_icount;
 uint64_t qflex_icount_500;
 uint64_t qflex_icount_1000;
 
-// QEMUClockType type = QEMU_CLOCK_REALTIME;
-QEMUClockType type = QEMU_CLOCK_VIRTUAL;
+QEMUClockType type = QEMU_CLOCK_REALTIME;
+// QEMUClockType type = QEMU_CLOCK_VIRTUAL;
 
 // static FILE *fptr;
 
 static void exit_trigger_cb(void *opaque)
 {
   (void)times;
-  uint64_t tot = 0, icount = 0;
+  uint64_t tot = 0, clock = 0;
   CPUState *cpu;
   CPU_FOREACH(cpu)
   {
     if (cpu->qflex_state->get_qflex_icount) {
       tot += cpu->qflex_state->get_qflex_icount();
+      clock += cpu->qflex_state->get_qflex_clock();
       break;
     }
   }
@@ -77,7 +76,7 @@ static void exit_trigger_cb(void *opaque)
   qflex_icount_1000 = tot - qflex_icount_1000;
 
   if (tot > 0)
-    printf("%ld - %ld - %ld\n", tot, icount, myicount);
+    printf("%ld - %ld - %ld\n", tot, clock, cpu_get_clock());
 
   int64_t end = qemu_clock_get_ms(type);
   gettimeofday(&t2, NULL);

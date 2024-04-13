@@ -716,6 +716,7 @@ static ssize_t qemu_send_packet_async_with_flags(NetClientState *sender,
 #endif
 
   if (sender->link_down || !sender->peer) {
+    printf("LINK DOWN\n");
     return size;
   }
 
@@ -723,12 +724,14 @@ static ssize_t qemu_send_packet_async_with_flags(NetClientState *sender,
   ret = filter_receive(sender, NET_FILTER_DIRECTION_TX, sender, flags, buf,
                        size, sent_cb);
   if (ret) {
+    printf("TX DONE\n");
     return ret;
   }
 
   ret = filter_receive(sender->peer, NET_FILTER_DIRECTION_RX, sender, flags,
                        buf, size, sent_cb);
   if (ret) {
+    printf("RX DONE\n");
     return ret;
   }
 
