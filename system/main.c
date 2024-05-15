@@ -26,7 +26,6 @@
 #include "qemu-main.h"
 #include "qemu/plugin-event.h"
 #include "qemu/timer.h"
-#include "sysemu/cpu-timers.h"
 #include "sysemu/sysemu.h"
 #include "../accel/tcg/internal-common.h"
 #include "tcg/tcg.h"
@@ -35,128 +34,82 @@
 #include <SDL.h>
 #endif
 
-static QEMUTimer *exit_trigger;
-static QEMUTimer *test_insn_trigger;
-static int64_t now, now_500;
+static QEMUTimer *mips_timer;
+static int64_t now;
 // a second
-static int64_t insn_cycles = 500000000;
-static int64_t cycles = 5000000000;
-static int64_t times = 0;
+static int64_t cycles = 1000000000;
 
 struct timeval t1, t2, t1_500;
 static double elapsedTime;
 
-uint64_t qflex_icount;
-uint64_t qflex_icount_500;
-uint64_t qflex_icount_1000;
+uint64_t qflex_icount = 0;
 
 QEMUClockType type = QEMU_CLOCK_REALTIME;
-// QEMUClockType type = QEMU_CLOCK_VIRTUAL;
 
-// static FILE *fptr;
+FILE *fptr;
 
 static void exit_trigger_cb(void *opaque)
 {
-  (void)times;
-  uint64_t tot = 0, clock = 0;
-  CPUState *cpu;
-  CPU_FOREACH(cpu)
-  {
-    if (cpu->qflex_state->get_qflex_icount) {
-      tot += cpu->qflex_state->get_qflex_icount();
-      clock += cpu->qflex_state->get_qflex_clock();
-      break;
-    }
-  }
-  // CPU_FOREACH(cpu)
-  // {
-  //   icount += (cpu->icount_budget -
-  //              (cpu->neg.icount_decr.u16.low + cpu->icount_extra));
-  // }
-  qflex_icount_1000 = tot - qflex_icount_1000;
-
-  if (tot > 0)
-    printf("%ld - %ld - %ld\n", tot, clock, cpu_get_clock());
-
-  int64_t end = qemu_clock_get_ms(type);
-  gettimeofday(&t2, NULL);
-  // printf("[%ld - %ld] - %ld: %ld - perc %f %% (%ld - %ld)\n", tot, mycounter,
-  //        times++, end - now, (qflex_icount_500 * 1.0) / qflex_icount_1000,
-  //        qflex_icount_500, qflex_icount_1000);
-  // printf("%ld\n", end - now);
-  // Write some text to the file
-  // if (fptr)
-  //   fprintf(fptr, "%ld\n", end - now);
-  now = end;
-
-  elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;    // sec to ms
-  elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
-  // printf("%f ms.\n", elapsedTime);
-  gettimeofday(&t1, NULL);
-  timer_mod(exit_trigger, qemu_clock_get_ns(type) + cycles);
-  (void)insn_cycles;
-  // timer_mod(test_insn_trigger, qemu_clock_get_ns(type) + insn_cycles);
-}
-
-static void test_insn_trigger_cb(void *opaque)
-{
-  int64_t end = qemu_clock_get_ms(type);
-  gettimeofday(&t2, NULL);
-
   uint64_t tot = 0;
   CPUState *cpu;
   CPU_FOREACH(cpu)
   {
-    if (cpu->qflex_state->get_qflex_icount) {
-      tot += cpu->qflex_state->get_qflex_icount();
+    if (cpu->qflex_state && cpu->qflex_state->get_icount) {
+      tot += cpu->qflex_state->get_icount(cpu->qflex_state);
       break;
     }
   }
+  if (cpu == NULL || cpu->qflex_state == NULL /*||
+      cpu->qflex_state->can_count == 0*/) {
+    timer_mod(mips_timer, qemu_clock_get_ns(type) + cycles);
+    return;
+  }
+  uint64_t curr = tot - qflex_icount;
+  qflex_icount = tot;
 
-  // printf("[%ld - %ld] insn - %ld: %ld - elaps %ld \n", tot, mycounter,
-  //        times++, end - now_500, tot-qflex_icount_1000);
-  qflex_icount_500 = tot - qflex_icount_1000;
-  // printf("[%ld - %ld] %ld - %ld (%ld - %ld)\n", tot, mycounter, end -
-  // now_500,
-  //        qflex_icount_500, tot, qflex_icount_1000);
-  now_500 = end;
+  int64_t end = qemu_clock_get_ms(type);
+  gettimeofday(&t2, NULL);
+  now = end;
 
   elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;    // sec to ms
   elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
-  // printf("%f ms.\n", elapsedTime);
-  gettimeofday(&t1_500, NULL);
+  printf("%ld in %f ms\n", curr, elapsedTime);
+  fprintf(fptr, "%ld in %f ms\n", curr, elapsedTime);
+
+  gettimeofday(&t1, NULL);
+  timer_mod(mips_timer, qemu_clock_get_ns(type) + cycles);
 }
 
 int qemu_default_main(void)
 {
   gettimeofday(&t1, NULL);
-  gettimeofday(&t1_500, NULL);
-  //
-  // // Open a file in writing mode
-  // fptr = fopen("log.txt", "a");
-  //
-  // now = qemu_clock_get_ms(type);
-  // now_500 = qemu_clock_get_ms(type);
-  exit_trigger = timer_new_ns(type, exit_trigger_cb, NULL);
-  timer_mod(exit_trigger, qemu_clock_get_ns(type) + cycles);
-  //
-  // test_insn_trigger = timer_new_ns(type, test_insn_trigger_cb, NULL);
-  // timer_mod(test_insn_trigger, qemu_clock_get_ns(type) + insn_cycles);
-  (void)now;
-  // (void)fptr;
-  (void)now_500;
-  (void)exit_trigger;
-  (void)exit_trigger_cb;
-  (void)type;
-  (void)test_insn_trigger;
-  (void)test_insn_trigger_cb;
+  CPUState *cpu;
+  CPU_FOREACH(cpu)
+  {
+    if (cpu != NULL)
+      break;
+  }
+
+  if (cpu != NULL && cpu->qflex_state != NULL) {
+    // Open a file in writing mode
+    char name[1024];
+    sprintf(name, "log_%d.txt", *(int *)cpu->qflex_state->dummy);
+    fptr = fopen(name, "a");
+
+    (void)exit_trigger_cb;
+    // now = qemu_clock_get_ms(type);
+    // mips_timer = timer_new_ns(type, exit_trigger_cb, NULL);
+    // timer_mod(mips_timer, qemu_clock_get_ns(type) + cycles);
+  }
 
   int status;
   status = qemu_main_loop();
   qemu_cleanup(status);
 
-  // Close the file
-  // fclose(fptr);
+  if (cpu != NULL && cpu->qflex_state != NULL) {
+    // Close the file
+    fclose(fptr);
+  }
 
   return status;
 }

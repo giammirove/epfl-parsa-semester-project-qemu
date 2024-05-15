@@ -200,7 +200,6 @@ static bool tap_qflex_is_broadcast(uint8_t *buf, ssize_t size)
   return (buf[0] == 0xff && buf[1] == 0xff && buf[2] == 0xff && buf[3] == 0xff);
 }
 
-// static int pkt_send = 0;
 static ssize_t tap_write_packet(TAPState *s, const struct iovec *iov,
                                 int iovcnt)
 {
@@ -275,7 +274,7 @@ static ssize_t tap_write_packet(TAPState *s, const struct iovec *iov,
       cpu->qflex_state->send_boot();
     }
     /* incremenet only in case the send has been successful */
-    else if (tap_qflex_filter((uint8_t *)(iov->iov_base + b), size)) {
+    if (tap_qflex_filter((uint8_t *)(iov->iov_base + b), size)) {
       if (tap_qflex_is_broadcast((uint8_t *)(iov->iov_base + b), size))
         cpu->qflex_state->pkt_sent += cpu->qflex_state->n_nodes - 1;
       else

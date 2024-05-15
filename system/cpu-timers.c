@@ -72,24 +72,26 @@ int64_t cpu_get_ticks(void)
   return ticks;
 }
 
-/* TODO giammi: custom clock */
+/* TODO qflex: custom clock */
 int64_t cpu_get_clock_locked(void)
 {
   CPUState *cpu = first_cpu;
-  if (cpu == NULL || cpu->qflex_state == NULL) {
-    printf("SOMETHING IS WRONG\n");
-    g_assert(false);
+  bool qflex = false;
+#ifdef CONFIG_PLUGIN
+  qflex = cpu != NULL && cpu->qflex_state != NULL;
+  if (qflex && cpu->qflex_state->can_count > 0) {
+    return cpu->qflex_state->offset_time +
+           (cpu->qflex_state->get_clock(cpu->qflex_state) << 6);
   }
-  // if (cpu->qflex_state->time_offset == 0)
-  return cpu->qflex_state->get_qflex_clock() << 6;
+#endif
 
   int64_t time;
   time = timers_state.cpu_clock_offset;
   if (timers_state.cpu_ticks_enabled) {
     time += get_clock();
   }
-  /* removing useless time */
-  time -= cpu->qflex_state->time_offset;
+  if (qflex)
+    cpu->qflex_state->offset_time = time;
   return time;
 }
 
