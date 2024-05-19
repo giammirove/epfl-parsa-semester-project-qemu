@@ -362,7 +362,7 @@ void qemu_plugin_register_vcpu_insn_exec_cb(struct qemu_plugin_insn *insn,
 QEMU_PLUGIN_API
 void qemu_plugin_register_vcpu_insn_exec_cb_qflex(
     struct qemu_plugin_insn *insn, qemu_plugin_vcpu_udata_cb_t cb,
-    enum qemu_plugin_cb_flags flags, void *udata, uint64_t (*test_fun)(void));
+    enum qemu_plugin_cb_flags flags, void *udata, uint64_t (*test_fun)(void *));
 
 /**
  * qemu_plugin_register_vcpu_insn_exec_inline_per_vcpu() - insn exec inline op

@@ -352,7 +352,6 @@ static void tci_qemu_st(CPUArchState *env, uint64_t taddr, uint64_t val,
  * One possible operation in the pseudo code is a call to binary code.
  * Therefore, disable CFI checks in the interpreter function
  */
-// TODO giammi: this is something
 uintptr_t QEMU_DISABLE_CFI tcg_qemu_tb_exec(CPUArchState *env,
                                             const void *v_tb_ptr)
 {

@@ -83,32 +83,6 @@ static ssize_t dump_receive_iov(DumpState *s, const struct iovec *iov, int cnt,
   hdr.caplen = caplen;
   hdr.len = size;
 
-  /* TODO giammi: */
-  // printf("DUMP %d\n", iov->iov_len);
-  // int tmplen = caplen;
-  // int tmpoff = offset;
-  // for (int i = 0 /*, j = 0*/;
-  //      i < cnt && /*j < dst_iov_cnt &&*/ (tmpoff || tmplen); i++) {
-  //   if (tmpoff >= iov[i].iov_len) {
-  //     tmpoff -= iov[i].iov_len;
-  //     continue;
-  //   }
-  //   int len = MIN(tmplen, iov[i].iov_len - offset);
-  //   printf("DUMP %d\n", len);
-  //   for (int k = 0; k < len; k++) {
-  //     printf("%x ", *(char *)(iov[i].iov_base + offset + k));
-  //     if (k % 16 == 0 && k > 0)
-  //       printf("\n");
-  //   }
-  //   printf("\n");
-  //
-  //   // dst_iov[j].iov_base = iov[i].iov_base + offset;
-  //   // dst_iov[j].iov_len = len;
-  //   // j++;
-  //   tmplen -= len;
-  //   offset = 0;
-  // }
-
   dumpiov[0].iov_base = &hdr;
   dumpiov[0].iov_len = sizeof(hdr);
   cnt = iov_copy(&dumpiov[1], cnt, iov, cnt, offset, caplen);

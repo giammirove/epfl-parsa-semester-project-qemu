@@ -172,10 +172,11 @@ static void plugin_cb__udata(enum qemu_plugin_event ev)
 }
 
 /*
- * TODO giammi:
  * Disable CFI checks.
  * The callback function has been loaded from an external library so we do not
  * have type information
+ *
+ * qflex implementation
  */
 QEMU_DISABLE_CFI
 static void plugin_cb__qlex_state(CPUState *cpu, enum qemu_plugin_event ev)
@@ -188,8 +189,8 @@ static void plugin_cb__qlex_state(CPUState *cpu, enum qemu_plugin_event ev)
     {
       QflexPluginState *state = cb->f.generic;
       cpu->qflex_state = state;
-      cpu->qflex_state->vm_pause = (int (*)(void *))vm_pause;
-      cpu->qflex_state->vm_unpause = (int (*)(void *))vm_unpause;
+      // cpu->qflex_state->vm_pause = (int (*)(void *))vm_qflex_pause;
+      // cpu->qflex_state->vm_unpause = (int (*)(void *))vm_qflex_unpause;
     }
     break;
   default:
@@ -383,7 +384,7 @@ void plugin_register_dyn_cb__udata(GArray **arr, qemu_plugin_vcpu_udata_cb_t cb,
 }
 void plugin_register_dyn_cb__qflex(GArray **arr, qemu_plugin_vcpu_udata_cb_t cb,
                                    enum qemu_plugin_cb_flags flags, void *udata,
-                                   uint64_t (*test_fun)(void))
+                                   uint64_t (*test_fun)(void *))
 {
   struct qemu_plugin_dyn_cb *dyn_cb = plugin_get_dyn_cb(arr);
 

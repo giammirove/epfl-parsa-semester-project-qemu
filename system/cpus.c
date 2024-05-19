@@ -434,12 +434,22 @@ void qemu_wait_io_event(CPUState *cpu)
 
   while (cpu_thread_is_idle(cpu)) {
     if (!slept) {
+      /* TODO qflex: */
+#ifdef CONFIG_PLUGIN
+      if (cpu && cpu->qflex_state && cpu->qflex_state->idle_cpus)
+        __sync_add_and_fetch(&cpu->qflex_state->idle_cpus, 1);
+#endif
       slept = true;
       qemu_plugin_vcpu_idle_cb(cpu);
     }
     qemu_cond_wait(cpu->halt_cond, &bql);
   }
   if (slept) {
+    /* TODO qflex: */
+#ifdef CONFIG_PLUGIN
+    if (cpu && cpu->qflex_state && cpu->qflex_state->idle_cpus)
+      __sync_sub_and_fetch(&cpu->qflex_state->idle_cpus, 1);
+#endif
     qemu_plugin_vcpu_resume_cb(cpu);
   }
 
@@ -660,14 +670,14 @@ void cpu_stop_current(void)
   }
 }
 
-int vm_pause(void)
+int vm_qflex_pause(void)
 {
   // pause_all_vcpus();
   qemu_clock_enable(QEMU_CLOCK_VIRTUAL, false);
   return 0;
   /*return vm_stop(RUN_STATE_PAUSED);*/
 }
-void vm_unpause(void)
+void vm_qflex_unpause(void)
 {
 
   // resume_all_vcpus();

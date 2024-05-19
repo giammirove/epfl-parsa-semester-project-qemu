@@ -85,9 +85,6 @@ static void icount_update_locked(CPUState *cpu)
 {
   int64_t executed = icount_get_executed(cpu);
   cpu->icount_budget -= executed;
-  // TODO giammi:
-  // printf("ICOUNT %ld - %ld - %ld\n", myicount,
-  //        qatomic_add_fetch(&myicount, executed), executed);
 
   qatomic_set_i64(&timers_state.qemu_icount,
                   timers_state.qemu_icount + executed);

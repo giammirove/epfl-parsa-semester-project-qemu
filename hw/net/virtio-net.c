@@ -1944,7 +1944,6 @@ static ssize_t virtio_net_receive_rcu(NetClientState *nc, const uint8_t *buf,
   size_t offset, i, guest_offset, j;
   ssize_t err;
 
-  /* TODO giammi: interesting here */
   if (!virtio_net_can_receive(nc)) {
     return -1;
   }
@@ -2030,14 +2029,6 @@ static ssize_t virtio_net_receive_rcu(NetClientState *nc, const uint8_t *buf,
     len = iov_from_buf(sg, elem->in_num, guest_offset, buf + offset,
                        size - offset);
 
-    /* TODO giammi: */
-    // printf("SG OUT %ld - %d\n", sg->iov_len, len);
-    // for (int k = offset; k < offset + len; k++) {
-    //   uint8_t v = *(uint8_t *)(sg->iov_base + k);
-    //   if (v > 0)
-    //     printf("[%d] SG OUT BODY %x\n", k, v);
-    // }
-
     total += len;
     offset += len;
     /* If buffers can't be merged, at this point we
@@ -2075,7 +2066,6 @@ static ssize_t virtio_net_receive_rcu(NetClientState *nc, const uint8_t *buf,
                  sizeof mhdr.num_buffers);
   }
 
-  /* TODO giammi: this is responsible for sending out the packets */
   for (j = 0; j < i; j++) {
     /* signal other side */
     virtqueue_fill(q->rx_vq, elems[j], lens[j], j);
@@ -2101,13 +2091,6 @@ static ssize_t virtio_net_do_receive(NetClientState *nc, const uint8_t *buf,
                                      size_t size)
 {
   RCU_READ_LOCK_GUARD();
-  /* TODO giammi: */
-  // printf("do receive %d - %ld", c++, size);
-  // if (buf) {
-  //   printf(" - %d", *buf);
-  // }
-  // printf("\n");
-
   return virtio_net_receive_rcu(nc, buf, size, false);
 }
 
@@ -3471,6 +3454,8 @@ static bool virtio_net_guest_notifier_pending(VirtIODevice *vdev, int idx)
    */
 
   if (idx == VIRTIO_CONFIG_IRQ_IDX) {
+    /* TODO giammi: */
+    printf("interrupt babe\n");
     return vhost_net_config_pending(get_vhost_net(nc->peer));
   }
   return vhost_net_virtqueue_pending(get_vhost_net(nc->peer), idx);
@@ -3503,6 +3488,8 @@ static void virtio_net_guest_notifier_mask(VirtIODevice *vdev, int idx,
    */
 
   if (idx == VIRTIO_CONFIG_IRQ_IDX) {
+    /* TODO giammi: */
+    printf("interrupt babe 2\n");
     vhost_net_config_mask(get_vhost_net(nc->peer), vdev, mask);
     return;
   }

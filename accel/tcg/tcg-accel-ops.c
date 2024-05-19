@@ -41,8 +41,6 @@
 #include "tcg-accel-ops-mttcg.h"
 #include "tcg-accel-ops-rr.h"
 #include "tcg-accel-ops-icount.h"
-// TODO giammi: added by me
-#include "internal-common.h"
 #include <stdio.h>
 
 /* common functionality among all TCG variants */
@@ -71,8 +69,6 @@ void tcg_cpu_destroy(CPUState *cpu) { cpu_thread_signal_destroyed(cpu); }
 int tcg_cpu_exec(CPUState *cpu)
 {
   int ret;
-  // myicount++;
-  // printf("icount %d\n", icount);
   assert(tcg_enabled());
   cpu_exec_start(cpu);
   ret = cpu_exec(cpu);

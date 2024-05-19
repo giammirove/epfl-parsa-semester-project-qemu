@@ -536,7 +536,7 @@ struct CPUState {
    */
   GArray *plugin_mem_cbs;
   CPUPluginState *plugin_state;
-  /* TODO giammi: */
+  /* TODO qflex: */
   QflexPluginState *qflex_state;
   // uint64_t (*get_qflex_icount)(void);
 #endif

@@ -225,7 +225,7 @@ static void cpu_common_realizefn(DeviceState *dev, Error **errp)
   if (tcg_enabled()) {
     cpu->plugin_state = qemu_plugin_create_vcpu_state();
     async_run_on_cpu(cpu, qemu_plugin_vcpu_init__async, RUN_ON_CPU_NULL);
-    // TODO giammi:
+    /* TODO qflex: */
     async_run_on_cpu(cpu, qemu_plugin_qflex_state__async, RUN_ON_CPU_NULL);
   }
 #endif

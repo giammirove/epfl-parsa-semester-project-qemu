@@ -14,9 +14,6 @@
 extern int64_t max_delay;
 extern int64_t max_advance;
 
-extern int64_t mycounter;
-extern int64_t myicount;
-
 /*
  * Return true if CS is not running in parallel with other cpus, either
  * because there are no other cpus or we are within an exclusive context.

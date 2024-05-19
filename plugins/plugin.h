@@ -90,7 +90,7 @@ void plugin_register_dyn_cb__udata(GArray **arr, qemu_plugin_vcpu_udata_cb_t cb,
 
 void plugin_register_dyn_cb__qflex(GArray **arr, qemu_plugin_vcpu_udata_cb_t cb,
                                    enum qemu_plugin_cb_flags flags, void *udata,
-                                   uint64_t (*test_fun)(void));
+                                   uint64_t (*test_fun)(void *));
 
 void plugin_register_vcpu_mem_cb(GArray **arr, void *cb,
                                  enum qemu_plugin_cb_flags flags,

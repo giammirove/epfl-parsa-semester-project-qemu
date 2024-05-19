@@ -803,15 +803,6 @@ static ssize_t nc_sendv_compat(NetClientState *nc, const struct iovec *iov,
     ret = nc->info->receive_raw(nc, buffer, offset);
   }
   else {
-    /* TODO giammi: */
-    // printf("SG HEADER %ld", offset);
-    // if (buffer) {
-    //   for (int k = 0; k < iov[0].iov_len; k++) {
-    //     int v = ((int *)iov[0].iov_base)[k];
-    //     if (v > 0)
-    //       printf("PREAMBLE %x\n", v);
-    //   }
-    // }
     ret = nc->info->receive(nc, buffer, offset);
   }
 

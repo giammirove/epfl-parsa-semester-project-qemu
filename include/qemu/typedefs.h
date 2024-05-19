@@ -1,7 +1,7 @@
 #ifndef QEMU_TYPEDEFS_H
 #define QEMU_TYPEDEFS_H
 #include <bits/pthreadtypes.h>
-#include <stdatomic.h>
+#include <bits/stdint-uintn.h>
 
 /*
  * This header is for selectively avoiding #include just to get a
@@ -157,49 +157,54 @@ typedef struct IRQState *qemu_irq;
 typedef void (*qemu_irq_handler)(void *opaque, int n, int level);
 
 /**
- * TODO giammi:
- * struct
- *
+ * TODO qflex:
  */
+enum { ST_F = 0, ST_N = 1, ST_B = 2 };
 struct QflexPluginState {
-  _Atomic uint64_t
-      can_count; /* decide whether the synchronization can be done */
-  _Atomic uint64_t pkt_sent; /* number of packet sent in the current quanta */
-  _Atomic uint64_t pkt_received; /* number of packet received (not delivered) in
-                            the current quanta */
-  _Atomic uint64_t
-      pkt_acked; /* number of packet acknowledged in the current quanta */
+  int64_t n_nodes;         /* number of nodes in the simulation */
+  int64_t can_count;       /* decide whether the synchronization can be done */
+  int64_t idle_cpus;       /* number of cpus in idle */
+  int64_t pkt_sent;        /* number of packet sent in the current quanta */
+  int64_t pkt_received;    /* number of packet received (not delivered) in
+                               the current quanta */
   void *pkt_list_received; /* GList * of QflexPacket - list of packet received
                               in the current quanta */
   void *pkt_list_send; /* GList * of QflexIOV - list of packet to send at the
-                          beginning of the next quanta */
-  _Atomic uint64_t can_send; /* decide whether the we can send out packekts (in
-                                reduction phase we can not) */
-  uint64_t time_offset;      /* time "lost" during synchronization (from quanta
-                                reached until synchronization completed) */
+                          beginning of the next quanta (NOT used at the moment,
+                          but could be part of an optimization) */
+  int64_t
+      offset_time; /* "qemu" virtual clock before qflex simulation started */
+
+  _Atomic int64_t stop;  /* decide whether you can send a network packet and
+                            threads can run */
+  _Atomic int64_t clock; /* new virtual time */
 
   /* locks for synchronization: pthread_mutex_t */
   pthread_mutex_t lock1;
   pthread_mutex_t lock2;
   pthread_mutex_t lock3;
-  pthread_mutex_t *locks;
+  pthread_mutex_t *locks; /* in case you need an array of them */
 
+  /* local struct (to access only from the plugin) */
+  void *lstate;
   /* for debug purposes */
   void *dummy;
 
-  uint64_t (*get_qflex_clock)(
-      void); /* hook to the plugin to return the current clock */
-  uint64_t (*get_qflex_icount)(
-      void); /* hook to the plugin to return the current instruction count */
+  int64_t (*get_clock)(
+      void *); /* hook to the plugin to return the current clock */
+  int64_t (*get_icount)(
+      void *); /* hook to the plugin to return the current instruction count */
   int (*vm_pause)(void *);   /* pause the virtual clock */
   int (*vm_unpause)(void *); /* unpause the virtual clock */
   int (*pkt_notify)(int);  /* notify the sender that we received the packet, but
                               not yet  delivered ... waiting for quanta to end */
   int (*pkt_receive)(int); /* deliver all packets received during the quanta */
   int (*pkt_send)(
-      int); /* send all packets not sent because in reduction phase */
+      void); /* send all packets not sent because in reduction phase */
   int (*send_boot)(void); /* signal the central server that we are to join the
                              multinode simulation */
+  int64_t (*can_send)(void *); /* decide whether the we can send out packekts
+                                (in reduction phase we can not) */
 };
 
 struct QflexPacket {

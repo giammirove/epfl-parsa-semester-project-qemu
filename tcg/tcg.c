@@ -38,8 +38,6 @@
 #include "exec/tlb-common.h"
 #include "tcg/startup.h"
 #include "tcg/tcg-op-common.h"
-// TODO giammi: added by me
-#include "accel/tcg/internal-common.h"
 
 #if UINTPTR_MAX == UINT32_MAX
 #define ELF_CLASS ELFCLASS32
@@ -2266,6 +2264,7 @@ bool tcg_op_supported(TCGOpcode op)
 
 static TCGOp *tcg_op_alloc(TCGOpcode opc, unsigned nargs);
 
+// static int qflex_counter = 0;
 static void tcg_gen_callN(TCGHelperInfo *info, TCGTemp *ret, TCGTemp **args)
 {
   TCGv_i64 extend_free[MAX_CALL_IARGS];
@@ -2280,6 +2279,9 @@ static void tcg_gen_callN(TCGHelperInfo *info, TCGTemp *ret, TCGTemp **args)
 
   total_args = info->nr_out + info->nr_in + 2;
   op = tcg_op_alloc(INDEX_op_call, total_args);
+  // qflex_counter++;
+  // if (qflex_counter % 10000 == 0)
+  //   printf("%d\n", qflex_counter);
 
 #ifdef CONFIG_PLUGIN
   /* Flag helpers that may affect guest state */
@@ -6176,7 +6178,6 @@ int tcg_gen_code(TCGContext *s, TranslationBlock *tb, uint64_t pc_start)
   QTAILQ_FOREACH(op, &s->ops, link)
   {
     TCGOpcode opc = op->opc;
-    // TODO giammi: added by me
 
     switch (opc) {
     case INDEX_op_mov_i32:

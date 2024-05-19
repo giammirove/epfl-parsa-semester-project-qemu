@@ -67,10 +67,10 @@ int vm_prepare_start(bool step_pending);
  */
 void vm_resume(RunState state);
 
-/* TODO giammi: */
-int vm_pause(void);
-/* TODO giammi: */
-void vm_unpause(void);
+/* TODO qflex: */
+int vm_qflex_pause(void);
+/* TODO qflex: */
+void vm_qflex_unpause(void);
 int vm_stop(RunState state);
 int vm_stop_force_state(RunState state);
 int vm_shutdown(void);

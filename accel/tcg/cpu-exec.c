@@ -62,9 +62,6 @@ typedef struct SyncClocks {
 
 int64_t max_delay;
 int64_t max_advance;
-int64_t mycounter = 0;
-int64_t myicount = 0;
-uint64_t (*get_qflex_icount)(void);
 
 static void align_clocks(SyncClocks *sc, CPUState *cpu)
 {
@@ -960,9 +957,6 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
       uint64_t cs_base;
       uint32_t flags, cflags;
 
-      /* TODO giammi: TESTING */
-      mycounter++;
-
       cpu_get_tb_cpu_state(cpu_env(cpu), &pc, &cs_base, &flags);
 
       /*
@@ -1019,16 +1013,13 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
         tb_add_jump(last_tb, tb_exit, tb);
       }
 
+      /* TODO giammi: */
+      // if (cpu->qflex_state && cpu->qflex_state->can_count > 0) {
+      //   while (cpu->qflex_state->stop != ST_F) {
+      //   }
+      // }
       cpu_loop_exec_tb(cpu, tb, pc, &last_tb, &tb_exit);
 
-      // TODO giammi:
-      // printf("exec tb %d\n", tb->icount);
-      // myicount += tb->icount;
-      // myicount++;
-      // qatomic_inc(&myicount);
-
-      /* Try to align the host and virtual clocks
-         if the guest is in advance */
       align_clocks(sc, cpu);
     }
   }

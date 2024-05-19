@@ -15,8 +15,6 @@
 #include "exec/plugin-gen.h"
 #include "tcg/tcg-op-common.h"
 #include "internal-target.h"
-// TODO giammi: added by me
-#include "internal-common.h"
 
 static void set_can_do_io(DisasContextBase *db, bool val)
 {
@@ -160,9 +158,6 @@ void translator_loop(CPUState *cpu, TranslationBlock *tb, int *max_insns,
   while (true) {
     *max_insns = ++db->num_insns;
     ops->insn_start(db, cpu);
-    // TODO giammi:
-    // myicount += *max_insns;
-    // qatomic_add(&myicount, *max_insns);
     tcg_debug_assert(db->is_jmp == DISAS_NEXT); /* no early exit */
 
     if (plugin_enabled) {
@@ -218,7 +213,6 @@ void translator_loop(CPUState *cpu, TranslationBlock *tb, int *max_insns,
   /* The disas_log hook may use these values rather than recompute.  */
   tb->size = db->pc_next - db->pc_first;
   tb->icount = db->num_insns;
-  // TODO giammi:
 
   if (qemu_loglevel_mask(CPU_LOG_TB_IN_ASM) &&
       qemu_log_in_addr_range(db->pc_first)) {

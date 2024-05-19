@@ -198,14 +198,12 @@ ssize_t qemu_net_queue_send(NetQueue *queue, NetClientState *sender,
   ssize_t ret;
 
   if (queue->delivering || !qemu_can_send_packet(sender)) {
-    printf("ALREADY DELIVERING\n");
     qemu_net_queue_append(queue, sender, flags, data, size, sent_cb);
     return 0;
   }
 
   ret = qemu_net_queue_deliver(queue, sender, flags, data, size);
   if (ret == 0) {
-    printf("CANT DELIVER\n");
     qemu_net_queue_append(queue, sender, flags, data, size, sent_cb);
     return 0;
   }
@@ -225,18 +223,6 @@ ssize_t qemu_net_queue_send_iov(NetQueue *queue, NetClientState *sender,
     qemu_net_queue_append_iov(queue, sender, flags, iov, iovcnt, sent_cb);
     return 0;
   }
-
-  /* TODO giammi: */
-  // for (int i = 0; i < iovcnt; i++) {
-  //   size_t len = iov[i].iov_len;
-  //   printf("SEND  %ld\n", len);
-  //
-  //   for (int k = 0; k < len; k++) {
-  //     uint8_t v = *(uint8_t *)(iov[i].iov_base + k);
-  //     if (v > 0)
-  //       printf("[%d] SEND BODY %x\n", k, v);
-  //   }
-  // }
 
   ret = qemu_net_queue_deliver_iov(queue, sender, flags, iov, iovcnt);
   if (ret == 0) {

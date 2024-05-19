@@ -75,13 +75,12 @@ int64_t cpu_get_ticks(void)
 /* TODO qflex: custom clock */
 int64_t cpu_get_clock_locked(void)
 {
+#ifdef CONFIG_PLUGIN
   CPUState *cpu = first_cpu;
   bool qflex = false;
-#ifdef CONFIG_PLUGIN
   qflex = cpu != NULL && cpu->qflex_state != NULL;
   if (qflex && cpu->qflex_state->can_count > 0) {
-    return cpu->qflex_state->offset_time +
-           (cpu->qflex_state->get_clock(cpu->qflex_state) << 6);
+    return cpu->qflex_state->get_clock(cpu->qflex_state);
   }
 #endif
 
@@ -90,8 +89,11 @@ int64_t cpu_get_clock_locked(void)
   if (timers_state.cpu_ticks_enabled) {
     time += get_clock();
   }
-  if (qflex)
+#ifdef CONFIG_PLUGIN
+  if (qflex) {
     cpu->qflex_state->offset_time = time;
+  }
+#endif
   return time;
 }
 

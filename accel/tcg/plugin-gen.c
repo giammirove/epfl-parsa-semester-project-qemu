@@ -454,14 +454,6 @@ static TCGOp *append_udata_cb(const struct qemu_plugin_dyn_cb *cb,
   /* call */
   op = copy_call(&begin_op, op, cb->f.vcpu_udata, cb_idx);
 
-  // TCGOp *op2;
-  // QTAILQ_FOREACH(op2, &begin_op, link)
-  // {
-  //   // TODO giammi:
-  //   // myicount++;
-  //   qatomic_inc(&myicount);
-  // }
-
   return op;
 }
 
@@ -488,17 +480,6 @@ static TCGOp *append_udata_cb_qflex(const struct qemu_plugin_dyn_cb *cb,
 
   /* call */
   op = copy_call(&begin_op, op, cb->f.vcpu_udata, cb_idx);
-  // TODO giammi:
-  // if (cb->test == 23)
-  //   printf("EECO\n");
-
-  // TCGOp *op2;
-  // QTAILQ_FOREACH(op2, &begin_op, link)
-  // {
-  //   // TODO giammi:
-  //   // myicount++;
-  //   qatomic_inc(&myicount);
-  // }
 
   return op;
 }
@@ -749,15 +730,6 @@ static void inject_cb_qflex(const GArray *cbs, TCGOp *begin_op, op_ok_fn ok)
       continue;
     }
 
-    // TODO giammi:
-    // if (cb->test == 23)
-    //   continue;
-    // if (cb->test_fun) {
-    //   printf("%p\n", cb->test_fun);
-    // get_qflex_icount = cb->test_fun;
-    // (cb->test_fun)();
-    // (cb->test_fun)(23);
-    // }
     op = append_udata_cb_qflex(cb, begin_op, op, &cb_idx);
   }
   rm_ops_range(begin_op, end_op);
@@ -878,15 +850,11 @@ static void plugin_gen_inject(struct qemu_plugin_tb *plugin_tb)
 {
   TCGOp *op;
   int insn_idx = -1;
-  // TODO giammi:
-  // myicount += plugin_tb->n;
 
   pr_ops();
 
   QTAILQ_FOREACH(op, &tcg_ctx->ops, link)
   {
-    // TODO giammi:
-    // myicount++;
     switch (op->opc) {
     case INDEX_op_insn_start:
       insn_idx++;

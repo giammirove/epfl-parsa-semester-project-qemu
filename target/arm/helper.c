@@ -6951,7 +6951,7 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
      .type = ARM_CP_NO_RAW,
      .writefn = ic_ivau_write
 #else
-      .type = ARM_CP_NOP
+     .type = ARM_CP_NOP
 #endif
     },
     /* Cache ops: all NOPs since we don't emulate caches */
@@ -12217,10 +12217,10 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .type = ARM_CP_CONST,
          .resetvalue = cpu->isar.id_aa64pfr0
 #else
-          .type = ARM_CP_NO_RAW,
-          .accessfn = access_aa64_tid3,
-          .readfn = id_aa64pfr0_read,
-          .writefn = arm_cp_write_ignore
+         .type = ARM_CP_NO_RAW,
+         .accessfn = access_aa64_tid3,
+         .readfn = id_aa64pfr0_read,
+         .writefn = arm_cp_write_ignore
 #endif
         },
         {.name = "ID_AA64PFR1_EL1",

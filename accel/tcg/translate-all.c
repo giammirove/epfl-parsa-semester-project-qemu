@@ -470,8 +470,6 @@ restart_translate:
           chunk_start = chunk_end;
         }
         insn++;
-        // TODO giammi: interesting
-        // myicount++;
       }
 
       if (chunk_start < code_size) {
