@@ -114,7 +114,6 @@ static void plugin_vcpu_cb__simple(CPUState *cpu, enum qemu_plugin_event ev)
     QLIST_FOREACH_SAFE_RCU(cb, &plugin.cb_lists[ev], entry, next)
     {
       qemu_plugin_vcpu_simple_cb_t func = cb->f.vcpu_simple;
-
       func(cb->ctx->id, cpu->cpu_index);
     }
     break;
@@ -187,10 +186,9 @@ static void plugin_cb__qlex_state(CPUState *cpu, enum qemu_plugin_event ev)
   case QEMU_PLUGIN_EV_QFLEX_STATE:
     QLIST_FOREACH_SAFE_RCU(cb, &plugin.cb_lists[ev], entry, next)
     {
+	    printf("SETTING\n");
       QflexPluginState *state = cb->f.generic;
       cpu->qflex_state = state;
-      // cpu->qflex_state->vm_pause = (int (*)(void *))vm_qflex_pause;
-      // cpu->qflex_state->vm_unpause = (int (*)(void *))vm_qflex_unpause;
     }
     break;
   default:
@@ -482,6 +480,11 @@ void qemu_plugin_vcpu_syscall_ret(CPUState *cpu, int64_t num, int64_t ret)
 
 void qemu_plugin_vcpu_idle_cb(CPUState *cpu)
 {
+  /* TODO qflex: */
+#ifdef CONFIG_PLUGIN
+    plugin_vcpu_cb__simple(cpu, QEMU_PLUGIN_EV_VCPU_IDLE);
+    return;
+#endif
   /* idle and resume cb may be called before init, ignore in this case */
   if (cpu->cpu_index < plugin.num_vcpus) {
     plugin_vcpu_cb__simple(cpu, QEMU_PLUGIN_EV_VCPU_IDLE);
@@ -490,6 +493,11 @@ void qemu_plugin_vcpu_idle_cb(CPUState *cpu)
 
 void qemu_plugin_vcpu_resume_cb(CPUState *cpu)
 {
+  /* TODO qflex: */
+#ifdef CONFIG_PLUGIN
+   plugin_vcpu_cb__simple(cpu, QEMU_PLUGIN_EV_VCPU_RESUME);
+   return;
+#endif
   if (cpu->cpu_index < plugin.num_vcpus) {
     plugin_vcpu_cb__simple(cpu, QEMU_PLUGIN_EV_VCPU_RESUME);
   }

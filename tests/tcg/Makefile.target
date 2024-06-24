@@ -107,7 +107,7 @@ ifeq ($(filter %-softmmu, $(TARGET)),)
 -include $(SRC_PATH)/tests/tcg/$(TARGET_NAME)/Makefile.target
 
 # Add the common build options
-CFLAGS+=-Wall -Werror -O0 -g -fno-strict-aliasing -fopenmp
+CFLAGS+=-Wall -Werror -O0 -g -fno-strict-aliasing
 ifeq ($(BUILD_STATIC),y)
 LDFLAGS+=-static
 endif

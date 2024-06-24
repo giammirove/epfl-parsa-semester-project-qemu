@@ -1,18 +1,17 @@
 t = []
-omp = dependency('openmp')
 if get_option('plugins')
-  foreach i : ['bb', 'empty', 'inline', 'insn', 'mem', 'syscall', 'qflex']
+  foreach i : ['bb', 'empty', 'inline', 'insn', 'mem', 'syscall', 'qflex_single']
     if host_os == 'windows'
       t += shared_module(i, files(i + '.c') + '../../contrib/plugins/win32_linker.c',
                         include_directories: '../../include/qemu',
                         link_depends: [win32_qemu_plugin_api_lib],
-                        link_args: ['-Lplugins', '-lqemu_plugin_api','-fopenmp'],
-                        dependencies: [glib,omp])
+                        link_args: ['-Lplugins', '-lqemu_plugin_api'],
+                        dependencies: glib)
 
     else
       t += shared_module(i, files(i + '.c'),
                         include_directories: '../../include/qemu',
-                        dependencies: [glib,omp])
+                        dependencies: glib)
     endif
   endforeach
 endif

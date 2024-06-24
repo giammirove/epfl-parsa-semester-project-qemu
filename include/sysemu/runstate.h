@@ -14,9 +14,8 @@ typedef void VMChangeStateHandler(void *opaque, bool running, RunState state);
 
 VMChangeStateEntry *qemu_add_vm_change_state_handler(VMChangeStateHandler *cb,
                                                      void *opaque);
-VMChangeStateEntry *
-qemu_add_vm_change_state_handler_prio(VMChangeStateHandler *cb, void *opaque,
-                                      int priority);
+VMChangeStateEntry *qemu_add_vm_change_state_handler_prio(
+        VMChangeStateHandler *cb, void *opaque, int priority);
 VMChangeStateEntry *
 qemu_add_vm_change_state_handler_prio_full(VMChangeStateHandler *cb,
                                            VMChangeStateHandler *prepare_cb,
@@ -38,7 +37,7 @@ void vm_state_notify(bool running, RunState state);
 
 static inline bool shutdown_caused_by_guest(ShutdownCause cause)
 {
-  return cause >= SHUTDOWN_CAUSE_GUEST_SHUTDOWN;
+    return cause >= SHUTDOWN_CAUSE_GUEST_SHUTDOWN;
 }
 
 /*
@@ -47,7 +46,7 @@ static inline bool shutdown_caused_by_guest(ShutdownCause cause)
  */
 static inline bool runstate_is_live(RunState state)
 {
-  return state == RUN_STATE_RUNNING || state == RUN_STATE_SUSPENDED;
+    return state == RUN_STATE_RUNNING || state == RUN_STATE_SUSPENDED;
 }
 
 void vm_start(void);
@@ -67,10 +66,6 @@ int vm_prepare_start(bool step_pending);
  */
 void vm_resume(RunState state);
 
-/* TODO qflex: */
-int vm_qflex_pause(void);
-/* TODO qflex: */
-void vm_qflex_unpause(void);
 int vm_stop(RunState state);
 int vm_stop_force_state(RunState state);
 int vm_shutdown(void);
@@ -78,11 +73,11 @@ void vm_set_suspended(bool suspended);
 bool vm_get_suspended(void);
 
 typedef enum WakeupReason {
-  /* Always keep QEMU_WAKEUP_REASON_NONE = 0 */
-  QEMU_WAKEUP_REASON_NONE = 0,
-  QEMU_WAKEUP_REASON_RTC,
-  QEMU_WAKEUP_REASON_PMTIMER,
-  QEMU_WAKEUP_REASON_OTHER,
+    /* Always keep QEMU_WAKEUP_REASON_NONE = 0 */
+    QEMU_WAKEUP_REASON_NONE = 0,
+    QEMU_WAKEUP_REASON_RTC,
+    QEMU_WAKEUP_REASON_PMTIMER,
+    QEMU_WAKEUP_REASON_OTHER,
 } WakeupReason;
 
 void qemu_system_reset_request(ShutdownCause reason);
@@ -112,3 +107,4 @@ void qemu_system_guest_crashloaded(GuestPanicInformation *info);
 bool qemu_system_dump_in_progress(void);
 
 #endif
+

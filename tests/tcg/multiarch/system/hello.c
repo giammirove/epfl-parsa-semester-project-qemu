@@ -5,9 +5,10 @@
  * whatever is in minilib.
  */
 
-#include "../../minilib/minilib.h"
+#include <minilib.h>
 
-int main(void) {
-  ml_printf("Hello World\n");
-  return 0;
+int main(void)
+{
+    ml_printf("Hello World\n");
+    return 0;
 }

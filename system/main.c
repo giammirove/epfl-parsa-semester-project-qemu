@@ -32,17 +32,18 @@
 
 int qemu_default_main(void)
 {
-  int status;
-  status = qemu_main_loop();
-  qemu_cleanup(status);
+    int status;
 
-  return status;
+    status = qemu_main_loop();
+    qemu_cleanup(status);
+
+    return status;
 }
 
 int (*qemu_main)(void) = qemu_default_main;
 
 int main(int argc, char **argv)
 {
-  qemu_init(argc, argv);
-  return qemu_main();
+    qemu_init(argc, argv);
+    return qemu_main();
 }

@@ -34,7 +34,9 @@
 QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 #define myprintf(...) /*printf(__VA_ARGS__)*/
 
-static qemu_plugin_u64 insn_count;
+#define NCPU 64
+/* adjust based on what you want */
+#define IDLE_INCREMENT 32
 
 static bool do_size;
 static GArray *sizes;
@@ -45,10 +47,6 @@ static uint64_t QUANTA = 0;
 /* current quanta id : 0,1,2,3,4,... */
 // static int quanta_id = 0;
 /* nodes that acked my quanta termination */
-static bool *to_ack_quanta;
-static bool *acked_quanta;
-static int n_acked_quanta;
-static int n_to_ack_quanta;
 static int boot_sent = 0; /* already sent the message that we booted */
 
 static int qmp_socket_fd = -1;
@@ -58,7 +56,7 @@ static qemu_plugin_id_t qemu_plugin_id;
 
 static uint64_t VCPUS = 0;
 /* barrier counter, we can overshoot it */
-static /*_Atomic*/ uint64_t barrier_sum;
+static uint64_t barrier_sum;
 
 /* node struct */
 typedef struct {
@@ -73,11 +71,11 @@ static int node_id = -1;
 /* using uint64_t gcc triggers an error */
 static uint32_t n_nodes = 0;
 /* number of nodes that reached the quanta */
-static _Atomic int nodes_at_quanta = -1;
+static  int nodes_at_quanta = -1;
 /* 1 = quanta reached */
-static _Atomic int nodes_ready = 0;
+static int nodes_ready = 0;
 /* node ready that went faster than me during the synchronization phase */
-static _Atomic int nodes_ack_ready = 0;
+static int nodes_ack_ready = 0;
 /* number of threads that are blocked waiting for synchronization barrier */
 /* path of the network config file */
 static char *config_path = NULL;
@@ -85,6 +83,8 @@ static qflex_node_t *nodes;
 static qflex_node_t server;
 /* current qflex related variables state */
 QflexPluginState *qflex_state;
+FILE *fptr;
+
 
 enum HEADERS {
   RDY = 1,    /* node is ready */
@@ -100,7 +100,6 @@ enum HEADERS {
   DEL = 11,   /* start delivering packet */
   SNT = 12,   /* num sent packets */
 };
-#define NCPU 64
 typedef struct {
   uint64_t next_quanta;
   uint64_t quanta_id;
@@ -108,17 +107,26 @@ typedef struct {
   bool ready_sent;
 
   uint64_t counters[NCPU];
+  uint64_t idle_counters[NCPU];
+  _Atomic uint64_t is_idle[NCPU];
   uint64_t idle_counter;
-  _Atomic uint64_t gcounter;
+  bool vcpu_done[NCPU];
+  uint64_t gcounter;
 
-  // pthread_mutex_t idle_lock;
-  // pthread_mutex_t barrier_lock;
-  // pthread_cond_t barrier_cond;
+  int64_t start_sync; 
+  int64_t vtime;
+  int64_t vtime_ns;
 
-  // pthread_mutex_t thread_lock;
-  // pthread_cond_t thread_cond;
+  pthread_mutex_t idle_lock;
+  pthread_mutex_t barrier_lock;
+  pthread_cond_t barrier_cond;
+
+  int64_t blocked_time; /* ts when synchronization begins */
+  int64_t cost_time; /* synchronization cost in time */
 } qflex_lstate_t;
 
+pthread_barrier_t       barrier;
+pthread_barrierattr_t   barrier_attr;
 static qflex_lstate_t *qflex_lstate;
 
 static void *qflex_server_connect_thread(void *args);
@@ -131,154 +139,147 @@ static int qflex_notify_packet(int dest_id);
 static void qflex_begin_of_quanta(QflexPluginState *state);
 static void qflex_start_simulation(QflexPluginState *state);
 static void qflex_snapshot_init(void);
-static void qflex_save_snapshot(qflex_lstate_t *lstate);
-static int qflex_send_num_packet(int n, int pkt_sent);
-static void *qflex_periodic_check(void *args);
+static void qflex_save_snapshot(QflexPluginState *state);
+static int qflex_send_num_packet(int n, int pkt_sent, int pkt_recv);
 static void *qflex_mips_counter(void *args);
+/* icount + idle time */
+static uint64_t qflex_compute_time(qflex_lstate_t *lstate);
+/* only icount */
 static uint64_t qflex_compute_icount(qflex_lstate_t *lstate);
+static int64_t qflex_get_real_clock(void);
 
-static inline int64_t qflex_get_clock(void *arg)
-{
+static int64_t qflex_get_real_clock(void){
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
+static int64_t qflex_get_clock(void *arg){
   QflexPluginState *state = arg;
-  int64_t act = state->offset_time + (atomic_load(&state->clock) >> 10);
-  if (act < 0) {
-    printf("NOT GOOD%ld\n", act);
-    printf("%ld\n", atomic_load(&state->clock));
-    exit(5);
+  qflex_lstate_t *lstate = state->lstate;
+  lstate->vtime_ns++;
+  int64_t t = lstate->vtime + state->offset_time + lstate->vtime_ns;
+  if (t < 0) {
+	  lstate->vtime = 0;
+	  return state->offset_time + lstate->vtime_ns;
   }
-  return act;
+  return t;
 }
-static inline int64_t qflex_update_clock(QflexPluginState *state) { return 0; }
-#define MIN_INC 100000000
-#define MAX_INC 1000000000
-#define min(a, b) (a < b ? a : b)
-#define max(a, b) (a < b ? b : a)
-static inline void qflex_update_clock_by(QflexPluginState *state, int inc)
-{
-  int64_t cinc = inc >> 2;
-  // cinc = max(min(cinc, MIN_INC), MAX_INC);
-  cinc = min(cinc, MIN_INC);
-  cinc = atomic_fetch_add(&state->clock, cinc);
+static void qflex_inc_clock(void *arg, int64_t inc){
+  qflex_lstate_t *lstate = arg;
+  inc <<= 6;
+  int64_t v = lstate->vtime;
+  lstate->vtime_ns  = 0;
+  if (v + inc < 0) {
+	printf("OVERFLOW\n");
+	lstate->vtime = inc;
+  } else {
+	lstate->vtime += inc;
+  }
 }
-/* used to pass the instruction count to the main qemu program */
-static int64_t qflex_get_icount(void *state) { return 0; }
 
-static int64_t qflex_can_send(void *arg)
+static int qflex_can_send(void *arg)
 {
   QflexPluginState *state = arg;
   qflex_lstate_t *lstate = state->lstate;
-  if (state->can_count == 0 || state->stop != ST_F)
-    return 0;
-  if (qflex_compute_icount(lstate) >= lstate->next_quanta)
+  if (state->stop != ST_F || qflex_compute_time(lstate) >= lstate->next_quanta)
     return 0;
 
   return 1;
 }
 
-static void plugin_exit(qemu_plugin_id_t id, void *p) { qflex_server_close(); }
+static void plugin_exit(qemu_plugin_id_t id, void *p) { 
+   fclose(fptr);
+   printf("COST TIME %ld\n", qflex_lstate->cost_time);
+   qflex_server_close();
+}
 
 static void qflex_start_delivering(QflexPluginState *state)
 {
   qflex_lstate_t *lstate = state->lstate;
-  printf("START DELIVERING %ld\n", lstate->quanta_id);
   pthread_mutex_lock(&state->lock1);
-  int pkt_sent = state->pkt_sent;
   state->is_delivering = true;
   pthread_mutex_unlock(&state->lock1);
-  printf("sending %d\n", pkt_sent);
-  qflex_send_num_packet(lstate->quanta_id, pkt_sent);
+  /* pkt_receive all flush everything so the number of packet sent could change
+   */
+  int recv = 0;
   if (state->pkt_receive != NULL) {
     state->pkt_receive(0);
+    recv = state->pkt_received;
   }
-  printf("STOP DELIVERING %ld\n", lstate->quanta_id);
+  qflex_send_num_packet(lstate->quanta_id, state->pkt_sent, recv);
 }
 /* if this called has been called that means we reached the quanta and every
  * message has been received by everyone */
 static void qflex_begin_of_quanta(QflexPluginState *state)
 {
   qflex_lstate_t *lstate = state->lstate;
-  myprintf("[%ld] SYNC %ld\n", lstate->quanta_id, state->pkt_sent);
 
-  myprintf("ACQ BEG\n");
-  /* unlock since pkt_receive could call mutex again */
-  // pthread_mutex_unlock(&state->lock1);
   pthread_mutex_lock(&state->lock1);
   state->is_delivering = false;
-  // printf("LOCK 4\n");
   // pthread_mutex_lock(&state->lock1);
-  /* TODO: should it be atomic here ? */
   state->pkt_sent = 0;
+  state->pkt_received = 0;
   lstate->ready_sent = false;
-
-  if (state->pkt_receive != NULL) {
-    state->pkt_receive(0);
-  }
-  pthread_cond_broadcast(&state->cond1);
 
   /* reset */
   nodes_at_quanta = 0;
-  n_acked_quanta = 0;
-  for (int i = 0; i < n_nodes; ++i)
-    acked_quanta[i] = false;
-  // myprintf("-------------------------------------------\n\n");
   /* finalize update since from now on we cannot receive any more message from
    * previous quanta */
   ++lstate->quanta_id;
   nodes_ready = 0;
   nodes_ack_ready = 0;
+
+  for (int i = 0; i < VCPUS; ++i)
+	lstate->vcpu_done[i] = false;
+
+  lstate->cost_time += qflex_get_real_clock() - lstate->blocked_time;
   state->stop = ST_F;
-  lstate->next_quanta = lstate->gcounter + QUANTA;
+  //pthread_mutex_lock(&lstate->barrier_lock);
+  lstate->next_quanta += QUANTA;
+  pthread_cond_broadcast(&lstate->barrier_cond);
   pthread_mutex_unlock(&state->lock1);
-  // printf("UNLOCK 9\n");
-  myprintf("REL SEND\n");
 }
 
-static bool qflex_check_quanta_imprecise(QflexPluginState *state, int inc)
+static void qflex_reached_quanta(QflexPluginState *state, uint64_t id, bool from_idle)
 {
+  if (state->synchro == 0)
+	  return;
+  pthread_mutex_lock(&state->lock1);
   qflex_lstate_t *lstate = state->lstate;
-  uint64_t value = lstate->gcounter + lstate->idle_counter;
-  qflex_update_clock_by(state, inc);
-  if ((int64_t)(value) < 0) {
-    printf("DAM BRO %ld\n", value);
+  lstate->vcpu_done[id] = true;
+  if (state->stop != ST_F) {
+    goto waiting;
   }
-  uint64_t next = lstate->next_quanta;
-  if (unlikely(value >= next) && !lstate->ready_sent) {
-    state->stop = ST_N;
-    // if (!lstate->ready_sent) {
-    lstate->ready_sent = true;
-    int pkt_sent = state->pkt_sent;
-    int q_id = lstate->quanta_id;
-    pthread_mutex_unlock(&state->lock1);
-    // printf("UNLOCK 7\n");
-    qflex_send_ready(q_id, pkt_sent, false);
-    // }
-    // else {
-    //   pthread_mutex_unlock(&state->lock1);
-    //   printf("UNLOCK 8\n");
-    // }
+state->stop = ST_N;
+lstate->ready_sent = true;
+int pkt_sent = state->pkt_sent;
+int q_id = lstate->quanta_id;
+qflex_send_ready(q_id, pkt_sent, false);
 
-    // pthread_mutex_lock(&lstate->barrier_lock);
-    // /* next_quanta is only changed inside barrier_lock's mutex */
-    // while (value >= lstate->next_quanta)
-    //   pthread_cond_wait(&lstate->barrier_cond, &lstate->barrier_lock);
-    //
-    // pthread_mutex_unlock(&lstate->barrier_lock);
-    return true;
-  }
+waiting: 
+  /* next_quanta is only changed inside barrier_lock's mutex */
+  if (!from_idle && (lstate->counters[id] + lstate->idle_counters[id]) >=
+         lstate->next_quanta && state->snap == 0)
+    pthread_cond_wait(&lstate->barrier_cond, &state->lock1);
+
   pthread_mutex_unlock(&state->lock1);
-  return false;
 }
 
 /* keeping this function as less as heavy as possible */
 static void vcpu_insn_exec_before(unsigned int cpu_index, void *udata)
 {
   QflexPluginState *state = udata;
-  qflex_lstate_t *lstate = state->lstate;
-  /* next_quanta is only changed inside barrier_lock's mutex */
-  while (state->stop == ST_B) {
+  if (state->can_count == 0) {
+    return;
   }
-  lstate->counters[cpu_index]++;
-  // pthread_cond_broadcast(&lstate->thread_cond);
+  qflex_lstate_t *lstate = state->lstate;
+  int64_t sum =
+      (++lstate->counters[cpu_index]) + lstate->idle_counters[cpu_index];
+  qflex_inc_clock(lstate, 1);
+  if (sum >= lstate->next_quanta) {
+    qflex_reached_quanta(state, cpu_index, false);
+  }
 }
 
 static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
@@ -289,9 +290,9 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
   for (i = 0; i < n; i++) {
     struct qemu_plugin_insn *insn = qemu_plugin_tb_get_insn(tb, i);
 
-    qemu_plugin_register_vcpu_insn_exec_cb_qflex(insn, vcpu_insn_exec_before,
+    qemu_plugin_register_vcpu_insn_exec_cb(insn, vcpu_insn_exec_before,
                                                  QEMU_PLUGIN_CB_NO_REGS,
-                                                 (void *)qflex_state, NULL);
+                                                 (void*)qflex_state);
   }
 }
 
@@ -302,11 +303,22 @@ static void *qflex_idle_clock(void *args)
   QflexPluginState *state = args;
   qflex_lstate_t *lstate = state->lstate;
   // qflex_lstate_t *lstate = state->lstate;
-  myprintf("IDLE TRHREAD STARTED\n");
+  int i = 0;
   for (;;) {
-    if (__sync_fetch_and_add(&state->idle_cpus, 0) == VCPUS) {
-      // pthread_cond_broadcast(&lstate->thread_cond);
-      ++lstate->idle_counter;
+    for (i = 0; i < VCPUS; ++i) {
+      if (lstate->is_idle[i] == true) {
+	      /* 
+	       * if one node is in idle and the other(s) not, we need to be careful that being in idle do not impact the performances, since the counter now is based on thread (it could be put to sleep, I could be slow, etc.)
+	       */
+	if (lstate->vcpu_done[i] == false) {
+	  lstate->idle_counters[i] += IDLE_INCREMENT;
+	  qflex_inc_clock(lstate, IDLE_INCREMENT);
+	}
+        int64_t sum = lstate->counters[i] + lstate->idle_counters[i];
+        if (sum >= lstate->next_quanta) {
+          qflex_reached_quanta(state, i, true);
+	}
+      }
     }
   }
 
@@ -314,81 +326,21 @@ static void *qflex_idle_clock(void *args)
   pthread_exit(EXIT_SUCCESS);
   return NULL;
 }
-/*
- * the problem seems to be that __sync_add_and_fetch does not atomically
- * increment idle_state (based on comparison with the main thread)
- *
- * UPDATE:
- * checking the source code and after some tests it seems that qemu not always
- * call vcpu_resume when we would expect it to be called,
- * therefore (at least for our usage) it is not fully reliable
- *
- * function that should call the callback
- *
- * void qemu_plugin_vcpu_resume_cb(CPUState *cpu)
- *  {
- *    if (cpu->cpu_index < plugin.num_vcpus) {
- *      plugin_vcpu_cb__simple(cpu, QEMU_PLUGIN_EV_VCPU_RESUME);
- *    }
- *  }
- *
- *  it seems that the condition is not satisfied always (during the boot in
- *  particular) and therefore resume is called fewer times that idle
- *
- *
- * QEMU emulator version 8.2.90 (v9.0.0-rc0-3-gf1ad3b43d1-dirty)
- *
- */
-// static void vcpu_idle(qemu_plugin_id_t id, unsigned int cpu_index)
-// {
-//   (void)idle_lock;
-// pthread_mutex_lock(&idle_lock);
-// uint64_t in_idle = atomic_fetch_add(&cpu_in_idle, 1) + 1;
-/* TODO: ideally you should stop only in that case, BUT it happens (probably
- * due to a faulty implementation by my side), that no CPU is either in idle
- * or running an instruction, therefore blocking indefinetely */
-// if (++cpu_in_idle == VCPUS) {
-// qflex_state->time_offset = get_current_clock() - get_qflex_clock();
-/* WARNING: we have delay in this operation, so we are not 100% precise */
-// idle_state = 1;
-// int64_t i = __sync_add_and_fetch(&idle_state, 1);
-// int64_t i2 = atomic_fetch_add(&idle_state2, 1) + 1;
-// int64_t d = *(int *)qflex_state->dummy;
-// // if (i != d)
-// printf("[%d] IDLE %ld (%ld) (%d) - %ld - %ld\n", quanta_id, i, i2, n_nodes,
-//        __sync_fetch_and_add(&blocked, 0), d);
-// assert(i <= VCPUS);
-// pthread_mutex_unlock(&idle_lock);
-// }
-// else {
-//   pthread_mutex_unlock(&idle_lock);
-// }
-// }
-// static int t = 0;
-// static void vcpu_resume(qemu_plugin_id_t id, unsigned int cpu_index)
-// {
-//   printf("RES\n");
-// pthread_mutex_lock(&idle_lock);
-// __sync_fetch_and_sub(&idle_state, 1);
-// int64_t i = __sync_sub_and_fetch(&idle_state, 1);
-// int64_t i2 = atomic_fetch_sub(&idle_state2, 1) - 1;
-// int64_t d = *(int *)qflex_state->dummy;
-// if (i != d)
-// printf("RESUME %ld (%ld) - %ld\n", i, i2, d);
-// assert(i >= 0);
-// if (i != d)
-//   t++;
-// assert(t < 1);
-// pthread_mutex_unlock(&idle_lock);
-// atomic_store(&idle_state, 0);
-// atomic_fetch_sub(&cpu_in_idle, 1);
-// if (--cpu_in_idle == 0) {
-//   myprintf("RESUME\n");
-//   idle_state = 0;
-//   qflex_state->time_offset = 0;
-// }
-// pthread_mutex_unlock(&idle_lock);
-// }
+
+static void vcpu_idle(qemu_plugin_id_t id, unsigned int cpu_index)
+{
+  if (qflex_state == NULL || qflex_state->lstate == NULL)
+	  return;
+  qflex_lstate_t *lstate = qflex_state->lstate;
+  lstate->is_idle[cpu_index] = true;
+}
+static void vcpu_resume(qemu_plugin_id_t id, unsigned int cpu_index)
+{
+  if (qflex_state == NULL || qflex_state->lstate == NULL)
+	  return;
+  qflex_lstate_t *lstate = qflex_state->lstate;
+  lstate->is_idle[cpu_index] = false;
+}
 
 static void qflex_config_load(char *path)
 {
@@ -446,7 +398,7 @@ static void qflex_config_load(char *path)
 
 static void qflex_start_simulation(QflexPluginState *state)
 {
-  if (__sync_fetch_and_add(&state->can_count, 0) > 0)
+  if (state->can_count > 0)
     return;
 
   /*
@@ -454,18 +406,14 @@ static void qflex_start_simulation(QflexPluginState *state)
    * every time can_count is checked is done as (can_count == 0)
    * so it is not a problem
    */
-  __sync_fetch_and_add(&state->can_count, 1);
+  state->can_count = 1;
 
-  /* Register init, translation block and exit callbacks */
-  qemu_plugin_register_vcpu_tb_trans_cb(qemu_plugin_id, vcpu_tb_trans);
-  qemu_plugin_register_atexit_cb(qemu_plugin_id, plugin_exit, NULL);
 
-  pthread_t t1, t2;
-  pthread_create(&t1, NULL, qflex_periodic_check, qflex_state);
-  pthread_create(&t2, NULL, qflex_mips_counter, qflex_state);
-  /* disable due to the fact that resume_cb seems not to be reliable */
-  // qemu_plugin_register_vcpu_idle_cb(qemu_plugin_id, vcpu_idle);
-  // qemu_plugin_register_vcpu_resume_cb(qemu_plugin_id, vcpu_resume);
+  pthread_t t1;
+  pthread_create(&t1, NULL, qflex_mips_counter, qflex_state);
+  (void)vcpu_idle;
+  (void)vcpu_resume;
+  (void)idle_thread;
 
   int res = pthread_create(&idle_thread, NULL, qflex_idle_clock, state);
   /* no errors in creating the thread */
@@ -475,7 +423,6 @@ static void qflex_start_simulation(QflexPluginState *state)
 static void *qflex_server_connect_thread(void *args)
 {
   QflexPluginState *state = args;
-  qflex_lstate_t *lstate = state->lstate;
   int opt = true;
   struct sockaddr_in servaddr;
   int valread;
@@ -484,10 +431,10 @@ static void *qflex_server_connect_thread(void *args)
   // socket create and verification
   server.fd_out = socket(AF_INET, SOCK_STREAM, 0);
   if (server.fd_out == -1) {
-    myprintf("socket creation failed...\n");
+    printf("socket creation failed...\n");
     exit(0);
   }
-  myprintf("Socket successfully created..\n");
+  printf("Socket successfully created..\n");
   bzero(&servaddr, sizeof(servaddr));
 
   if (setsockopt(server.fd_out, SOL_SOCKET, SO_REUSEADDR, (char *)&opt,
@@ -521,7 +468,6 @@ static void *qflex_server_connect_thread(void *args)
         res = read(server.fd_out, &buf, sizeof(buf));
         (void)res;
         remote = htonl(buf);
-        g_assert(remote == lstate->quanta_id);
         /* now we are sure that everyone is at the same quanta */
         qflex_begin_of_quanta(state);
         break;
@@ -529,7 +475,6 @@ static void *qflex_server_connect_thread(void *args)
         res = read(server.fd_out, &buf, sizeof(buf));
         (void)res;
         remote = htonl(buf);
-        g_assert(remote == lstate->quanta_id);
         qflex_start_delivering(state);
         break;
       case BBT:
@@ -541,9 +486,8 @@ static void *qflex_server_connect_thread(void *args)
         res = read(server.fd_out, &buf, sizeof(buf));
         (void)res;
         remote = htonl(buf);
-        // g_assert(remote == quanta_id);
         printf("SNAPSHOT %d\n", remote);
-        qflex_save_snapshot(lstate);
+        qflex_save_snapshot(state);
         break;
 
       default:
@@ -564,7 +508,7 @@ static void qflex_server_connect(QflexPluginState *state)
   pthread_t t1;
   int res = pthread_create(&t1, NULL, qflex_server_connect_thread, state);
   if (res) {
-    myprintf("error %d\n", res);
+    printf("error %d\n", res);
     exit(EXIT_FAILURE);
   }
 }
@@ -577,11 +521,9 @@ static void qflex_server_close(void)
 
 static int qflex_send_ready(int n, int pkt_sent, bool is_ack)
 {
-  printf("[%d] SENT READY\n", n);
   int type = is_ack ? ARDY : RDY;
 
   int arr[] = {type, htonl(n), htonl(pkt_sent)};
-  // myprintf("PKT SENT %d IN %d\n", pkt_sent, quanta_id);
   if (write(server.fd_out, &arr, 3 * sizeof(int)) == -1) {
     myprintf("Can not send number to server\n");
     exit(EXIT_FAILURE);
@@ -618,13 +560,12 @@ static int qflex_send_boot(void)
 
   return 0;
 }
-static int qflex_send_num_packet(int n, int pkt_sent)
+static int qflex_send_num_packet(int n, int pkt_sent, int pkt_recv)
 {
   int type = SNT;
 
-  int arr[] = {type, htonl(n), htonl(pkt_sent)};
-  // myprintf("PKT SENT %d IN %d\n", pkt_sent, quanta_id);
-  if (write(server.fd_out, &arr, 3 * sizeof(int)) == -1) {
+  int arr[] = {type, htonl(n), htonl(pkt_sent), htonl(pkt_recv)};
+  if (write(server.fd_out, &arr, 4 * sizeof(int)) == -1) {
     myprintf("Can not send number to server\n");
     exit(EXIT_FAILURE);
   }
@@ -681,33 +622,23 @@ static void qflex_snapshot_init(void)
   }
 }
 
+static uint64_t qflex_compute_time(qflex_lstate_t *lstate)
+{
+  uint64_t curr = 0;
+  for (int i = 0; i < VCPUS; i++) {
+    curr += lstate->counters[i] + lstate->idle_counters[i];
+  }
+  return curr;
+}
 static uint64_t qflex_compute_icount(qflex_lstate_t *lstate)
 {
   uint64_t curr = 0;
-  for (volatile int i = 0; i < NCPU; i++) {
+  for (volatile int i = 0; i < VCPUS; i++) {
     curr += lstate->counters[i];
   }
-  lstate->gcounter = curr;
   return curr;
 }
 
-static void *qflex_periodic_check(void *args)
-{
-  QflexPluginState *state = args;
-  qflex_lstate_t *lstate = state->lstate;
-  uint64_t curr = 0, prev = 0;
-  for (;;) {
-    usleep(1);
-    // pthread_mutex_lock(&lstate->thread_lock);
-    // pthread_cond_wait(&lstate->thread_cond, &lstate->thread_lock);
-    // pthread_mutex_unlock(&lstate->thread_lock);
-    pthread_mutex_lock(&state->lock1);
-    curr = (qflex_compute_icount(lstate) + lstate->idle_counter) - prev;
-    prev = curr;
-    qflex_check_quanta_imprecise(state, curr);
-  }
-  return NULL;
-}
 static void *qflex_mips_counter(void *args)
 {
   QflexPluginState *state = args;
@@ -716,18 +647,19 @@ static void *qflex_mips_counter(void *args)
   uint64_t max = 0;
   uint64_t prev_quanta = 0;
   (void)prev_quanta;
+  (void)qflex_compute_icount;
+  int t = 0;
   for (;;) {
     sleep(1);
-    // uint64_t curr = *counter;
+    t++;
     uint64_t curr = qflex_compute_icount(lstate);
     uint64_t m = curr - prev;
     if (m > max) {
       max = m;
     }
-    // printf("%ld - %ld - %ld\n", (max / 1000000), (m / 1000000),
-    //        lstate->quanta_id - prev_quanta);
+    printf("%d - %ld - %ld - %ld\n", t, (max / 1000000), (m / 1000000), lstate->cost_time);
+    fprintf(fptr, "%ld\n", m);
     prev = curr;
-    prev_quanta = lstate->quanta_id;
   }
   return NULL;
 }
@@ -737,9 +669,10 @@ static void *qflex_mips_counter(void *args)
  *  qmp can be used only by qflex plugin
  *
  */
-static void qflex_save_snapshot(qflex_lstate_t *lstate)
+static void qflex_save_snapshot(QflexPluginState *state)
 {
-
+  state->snap = 1;
+  qflex_lstate_t *lstate = state->lstate;
   printf("SAVE SNAPSHOT\n");
   char ress[1024];
   if (qmp_cap == 0) {
@@ -753,27 +686,34 @@ static void qflex_save_snapshot(qflex_lstate_t *lstate)
   }
 
   bzero(ress, sizeof(ress));
-  char cap2[2048] =
-      "{ \"execute\": \"snapshot-save\",\"arguments\": {\"job-id\": "
-      "\"snapsave0\",\"tag\": \"my-snap\",\"vmstate\": \"disk0\",\"devices\": "
-      "[\"disk0\", \"disk1\"]}}\0";
+  char cap2[2048];
+  sprintf(cap2, "{ \"execute\": \"snapshot-save-qflex\",\"arguments\": {\"job-id\": \"snapsave-%ld\", \"tag\": \"snap-%ld\"}}",lstate->quanta_id, lstate->quanta_id);
   int res = write(qmp_socket_fd, cap2, strlen(cap2));
   (void)res;
   res = read(qmp_socket_fd, ress, sizeof(ress));
+    printf("%s\n", ress);
   (void)res;
+
 
   for (;;) {
     bzero(ress, sizeof(ress));
     bzero(cap2, sizeof(cap2));
     strcpy(cap2, "{ \"execute\": \"query-jobs\"} \0");
     res = write(qmp_socket_fd, cap2, strlen(cap2));
+  pthread_mutex_lock(&state->lock1);
+  pthread_cond_broadcast(&lstate->barrier_cond);
+  pthread_mutex_unlock(&state->lock1);
+    printf("send req %d\n", res);
     res = read(qmp_socket_fd, ress, sizeof(ress));
     (void)res;
-    if (strstr(ress, "\"concluded\"") && strstr(ress, "\"snapsave0\"")) {
+    printf("%s\n", ress);
+    /* assumption one job at time */
+    if (strstr(ress, "\"concluded\"")) {
       break;
     }
     sleep(1);
   }
+  state->snap = 0;
 
   qflex_send_snapshot(lstate->quanta_id);
   printf("TASK COMPLETED\n");
@@ -788,6 +728,7 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
   sizes = g_array_new(true, true, sizeof(unsigned long));
   VCPUS = info->system.max_vcpus;
   node_id = -1;
+  int synchro = 1;
 
   for (int i = 0; i < argc; i++) {
     char *opt = argv[i];
@@ -800,6 +741,9 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
     }
     else if (g_strcmp0(tokens[0], "quanta") == 0) {
       QUANTA = atoi((char *)tokens[1]);
+    }
+    else if (g_strcmp0(tokens[0], "synchro") == 0) {
+      synchro = atoi((char *)tokens[1]);
     }
     else if (g_strcmp0(tokens[0], "node_id") == 0) {
       node_id = atoi((char *)tokens[1]);
@@ -823,13 +767,11 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
     return -1;
   }
 
+
+  fptr = fopen("mips.txt", "w");
   qflex_config_load(config_path);
 
-  // atomic_init(&barrier_sum, 0);
   barrier_sum = 0;
-
-  insn_count =
-      qemu_plugin_scoreboard_u64(qemu_plugin_scoreboard_new(sizeof(uint64_t)));
 
   qflex_state = malloc(sizeof(QflexPluginState));
   qflex_state->pkt_sent = 0;
@@ -840,20 +782,27 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
   /* should be 0 at the beginning */
   qflex_state->n_nodes = n_nodes;
   qflex_state->can_count = 0;
+  qflex_state->snap = 0;
   qflex_state->stop = ST_F;
   qflex_state->clock = 0;
   qflex_state->idle_cpus = 0;
   qflex_state->offset_time = 0;
+  qflex_state->synchro = synchro;
   qflex_state->pkt_notify = qflex_notify_packet;
   qflex_state->get_clock = qflex_get_clock;
-  qflex_state->get_icount = qflex_get_icount;
+  qflex_state->get_icount = NULL;
   qflex_state->send_boot = qflex_send_boot;
   qflex_state->can_send = qflex_can_send;
 
   qflex_lstate = malloc(sizeof(qflex_lstate_t));
-  for (int i = 0; i < NCPU; i++) {
+  for (int i = 0; i < VCPUS; i++) {
     qflex_lstate->counters[i] = 0;
+    qflex_lstate->idle_counters[i] = 0;
+    qflex_lstate->vcpu_done[i] = false;
   }
+  qflex_lstate->vtime = 0;
+  qflex_lstate->vtime_ns = 0;
+  qflex_lstate->cost_time = 0;
 
   qflex_state->lstate = qflex_lstate;
   pthread_mutexattr_t attr, attr_thread;
@@ -862,6 +811,17 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
   pthread_condattr_t attr_cond, attr_cond_thread;
   pthread_condattr_init(&attr_cond);
   pthread_condattr_init(&attr_cond_thread);
+
+  pthread_mutex_init(&qflex_lstate->idle_lock, &attr);
+  pthread_mutex_init(&qflex_lstate->barrier_lock, &attr);
+  pthread_cond_init(&qflex_lstate->barrier_cond, &attr_cond);
+
+  int ret, pshared;
+    ret = pthread_barrierattr_init(&barrier_attr);
+    (void)ret;
+    pthread_barrierattr_getpshared(&barrier_attr, &pshared);
+    pthread_barrier_init(&barrier, &barrier_attr, VCPUS+1);
+
   /* so that a thread can lock a mutex multiple times (i.e. tap receive with a
    * retry could) */
   // pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
@@ -874,32 +834,21 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
   nodes_at_quanta = 0;
   qflex_lstate->next_quanta = QUANTA;
 
-  // pthread_mutex_init(&qflex_lstate->idle_lock, &attr);
-  // pthread_mutex_init(&qflex_lstate->barrier_lock, &attr);
-  // pthread_cond_init(&qflex_lstate->barrier_cond, &attr_cond);
-
-  // pthread_mutex_init(&qflex_lstate->thread_lock, &attr_thread);
-  // pthread_cond_init(&qflex_lstate->thread_cond, &attr_cond_thread);
-
   qflex_lstate->quanta_id = 0;
   qflex_state->dummy = &node_id;
   /* see qflex_check_quanta */
   assert(VCPUS < QUANTA);
 
-  to_ack_quanta = (bool *)malloc(n_nodes * sizeof(bool));
-  acked_quanta = (bool *)malloc(n_nodes * sizeof(bool));
-  for (int i = 0; i < n_nodes; ++i) {
-    acked_quanta[i] = false;
-    to_ack_quanta[i] = false;
-  }
-  n_acked_quanta = 0;
-  n_to_ack_quanta = 0;
-
   qemu_plugin_register_qflex_state_cb(qemu_plugin_id, qflex_state);
-  qflex_start_simulation(qflex_state);
+  /* Register init, translation block and exit callbacks */
+  qemu_plugin_register_vcpu_tb_trans_cb(qemu_plugin_id, vcpu_tb_trans);
+  qemu_plugin_register_atexit_cb(qemu_plugin_id, plugin_exit, NULL);
+  qemu_plugin_register_vcpu_idle_cb(qemu_plugin_id, vcpu_idle);
+  qemu_plugin_register_vcpu_resume_cb(qemu_plugin_id, vcpu_resume);
 
-  // qflex_snapshot_init();
+  qflex_snapshot_init();
   (void)qflex_snapshot_init;
+  (void)qflex_server_connect;
   qflex_server_connect(qflex_state);
   return 0;
 }

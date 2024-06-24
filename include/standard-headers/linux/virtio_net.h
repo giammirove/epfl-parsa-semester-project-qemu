@@ -14,8 +14,8 @@
  * 3. Neither the name of IBM nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS''
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED.  IN NO EVENT SHALL IBM OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
@@ -32,100 +32,91 @@
 #include "standard-headers/linux/if_ether.h"
 
 /* The feature bitmap for virtio net */
-#define VIRTIO_NET_F_CSUM 0       /* Host handles pkts w/ partial csum */
-#define VIRTIO_NET_F_GUEST_CSUM 1 /* Guest handles pkts w/ partial csum */
-#define VIRTIO_NET_F_CTRL_GUEST_OFFLOADS                                       \
-  2                                   /* Dynamic offload configuration.        \
-                                       */
-#define VIRTIO_NET_F_MTU 3            /* Initial MTU advice */
-#define VIRTIO_NET_F_MAC 5            /* Host has given MAC address. */
-#define VIRTIO_NET_F_GUEST_TSO4 7     /* Guest can handle TSOv4 in. */
-#define VIRTIO_NET_F_GUEST_TSO6 8     /* Guest can handle TSOv6 in. */
-#define VIRTIO_NET_F_GUEST_ECN 9      /* Guest can handle TSO[6] w/ ECN in. */
-#define VIRTIO_NET_F_GUEST_UFO 10     /* Guest can handle UFO in. */
-#define VIRTIO_NET_F_HOST_TSO4 11     /* Host can handle TSOv4 in. */
-#define VIRTIO_NET_F_HOST_TSO6 12     /* Host can handle TSOv6 in. */
-#define VIRTIO_NET_F_HOST_ECN 13      /* Host can handle TSO[6] w/ ECN in. */
-#define VIRTIO_NET_F_HOST_UFO 14      /* Host can handle UFO in. */
-#define VIRTIO_NET_F_MRG_RXBUF 15     /* Host can merge receive buffers. */
-#define VIRTIO_NET_F_STATUS 16        /* virtio_net_config.status available */
-#define VIRTIO_NET_F_CTRL_VQ 17       /* Control channel available */
-#define VIRTIO_NET_F_CTRL_RX 18       /* Control channel RX mode support */
-#define VIRTIO_NET_F_CTRL_VLAN 19     /* Control channel VLAN filtering */
-#define VIRTIO_NET_F_CTRL_RX_EXTRA 20 /* Extra RX mode control support */
-#define VIRTIO_NET_F_GUEST_ANNOUNCE                                            \
-  21 /* Guest can announce device on the                                       \
-      * network */
-#define VIRTIO_NET_F_MQ                                                        \
-  22                                  /* Device supports Receive Flow          \
-                                       * Steering */
-#define VIRTIO_NET_F_CTRL_MAC_ADDR 23 /* Set MAC address */
-#define VIRTIO_NET_F_VQ_NOTF_COAL                                              \
-  52 /* Device supports virtqueue notification coalescing */
-#define VIRTIO_NET_F_NOTF_COAL                                                 \
-  53                               /* Device supports notifications coalescing \
-                                    */
-#define VIRTIO_NET_F_GUEST_USO4 54 /* Guest can handle USOv4 in. */
-#define VIRTIO_NET_F_GUEST_USO6 55 /* Guest can handle USOv6 in. */
-#define VIRTIO_NET_F_HOST_USO 56   /* Host can handle USO in. */
-#define VIRTIO_NET_F_HASH_REPORT 57 /* Supports hash report */
-#define VIRTIO_NET_F_GUEST_HDRLEN                                              \
-  59                            /* Guest provides the exact hdr_len value. */
-#define VIRTIO_NET_F_RSS 60     /* Supports RSS RX steering */
-#define VIRTIO_NET_F_RSC_EXT 61 /* extended coalescing info */
-#define VIRTIO_NET_F_STANDBY                                                   \
-  62                                 /* Act as standby for another device      \
-                                      * with the same MAC.                     \
-                                      */
-#define VIRTIO_NET_F_SPEED_DUPLEX 63 /* Device set linkspeed and duplex */
+#define VIRTIO_NET_F_CSUM	0	/* Host handles pkts w/ partial csum */
+#define VIRTIO_NET_F_GUEST_CSUM	1	/* Guest handles pkts w/ partial csum */
+#define VIRTIO_NET_F_CTRL_GUEST_OFFLOADS 2 /* Dynamic offload configuration. */
+#define VIRTIO_NET_F_MTU	3	/* Initial MTU advice */
+#define VIRTIO_NET_F_MAC	5	/* Host has given MAC address. */
+#define VIRTIO_NET_F_GUEST_TSO4	7	/* Guest can handle TSOv4 in. */
+#define VIRTIO_NET_F_GUEST_TSO6	8	/* Guest can handle TSOv6 in. */
+#define VIRTIO_NET_F_GUEST_ECN	9	/* Guest can handle TSO[6] w/ ECN in. */
+#define VIRTIO_NET_F_GUEST_UFO	10	/* Guest can handle UFO in. */
+#define VIRTIO_NET_F_HOST_TSO4	11	/* Host can handle TSOv4 in. */
+#define VIRTIO_NET_F_HOST_TSO6	12	/* Host can handle TSOv6 in. */
+#define VIRTIO_NET_F_HOST_ECN	13	/* Host can handle TSO[6] w/ ECN in. */
+#define VIRTIO_NET_F_HOST_UFO	14	/* Host can handle UFO in. */
+#define VIRTIO_NET_F_MRG_RXBUF	15	/* Host can merge receive buffers. */
+#define VIRTIO_NET_F_STATUS	16	/* virtio_net_config.status available */
+#define VIRTIO_NET_F_CTRL_VQ	17	/* Control channel available */
+#define VIRTIO_NET_F_CTRL_RX	18	/* Control channel RX mode support */
+#define VIRTIO_NET_F_CTRL_VLAN	19	/* Control channel VLAN filtering */
+#define VIRTIO_NET_F_CTRL_RX_EXTRA 20	/* Extra RX mode control support */
+#define VIRTIO_NET_F_GUEST_ANNOUNCE 21	/* Guest can announce device on the
+					 * network */
+#define VIRTIO_NET_F_MQ	22	/* Device supports Receive Flow
+					 * Steering */
+#define VIRTIO_NET_F_CTRL_MAC_ADDR 23	/* Set MAC address */
+#define VIRTIO_NET_F_VQ_NOTF_COAL 52	/* Device supports virtqueue notification coalescing */
+#define VIRTIO_NET_F_NOTF_COAL	53	/* Device supports notifications coalescing */
+#define VIRTIO_NET_F_GUEST_USO4	54	/* Guest can handle USOv4 in. */
+#define VIRTIO_NET_F_GUEST_USO6	55	/* Guest can handle USOv6 in. */
+#define VIRTIO_NET_F_HOST_USO	56	/* Host can handle USO in. */
+#define VIRTIO_NET_F_HASH_REPORT  57	/* Supports hash report */
+#define VIRTIO_NET_F_GUEST_HDRLEN  59	/* Guest provides the exact hdr_len value. */
+#define VIRTIO_NET_F_RSS	  60	/* Supports RSS RX steering */
+#define VIRTIO_NET_F_RSC_EXT	  61	/* extended coalescing info */
+#define VIRTIO_NET_F_STANDBY	  62	/* Act as standby for another device
+					 * with the same MAC.
+					 */
+#define VIRTIO_NET_F_SPEED_DUPLEX 63	/* Device set linkspeed and duplex */
 
 #ifndef VIRTIO_NET_NO_LEGACY
-#define VIRTIO_NET_F_GSO 6 /* Host handles pkts w/ any GSO type */
-#endif                     /* VIRTIO_NET_NO_LEGACY */
+#define VIRTIO_NET_F_GSO	6	/* Host handles pkts w/ any GSO type */
+#endif /* VIRTIO_NET_NO_LEGACY */
 
-#define VIRTIO_NET_S_LINK_UP 1  /* Link is up */
-#define VIRTIO_NET_S_ANNOUNCE 2 /* Announcement is needed */
+#define VIRTIO_NET_S_LINK_UP	1	/* Link is up */
+#define VIRTIO_NET_S_ANNOUNCE	2	/* Announcement is needed */
 
 /* supported/enabled hash types */
-#define VIRTIO_NET_RSS_HASH_TYPE_IPv4 (1 << 0)
-#define VIRTIO_NET_RSS_HASH_TYPE_TCPv4 (1 << 1)
-#define VIRTIO_NET_RSS_HASH_TYPE_UDPv4 (1 << 2)
-#define VIRTIO_NET_RSS_HASH_TYPE_IPv6 (1 << 3)
-#define VIRTIO_NET_RSS_HASH_TYPE_TCPv6 (1 << 4)
-#define VIRTIO_NET_RSS_HASH_TYPE_UDPv6 (1 << 5)
-#define VIRTIO_NET_RSS_HASH_TYPE_IP_EX (1 << 6)
-#define VIRTIO_NET_RSS_HASH_TYPE_TCP_EX (1 << 7)
-#define VIRTIO_NET_RSS_HASH_TYPE_UDP_EX (1 << 8)
+#define VIRTIO_NET_RSS_HASH_TYPE_IPv4          (1 << 0)
+#define VIRTIO_NET_RSS_HASH_TYPE_TCPv4         (1 << 1)
+#define VIRTIO_NET_RSS_HASH_TYPE_UDPv4         (1 << 2)
+#define VIRTIO_NET_RSS_HASH_TYPE_IPv6          (1 << 3)
+#define VIRTIO_NET_RSS_HASH_TYPE_TCPv6         (1 << 4)
+#define VIRTIO_NET_RSS_HASH_TYPE_UDPv6         (1 << 5)
+#define VIRTIO_NET_RSS_HASH_TYPE_IP_EX         (1 << 6)
+#define VIRTIO_NET_RSS_HASH_TYPE_TCP_EX        (1 << 7)
+#define VIRTIO_NET_RSS_HASH_TYPE_UDP_EX        (1 << 8)
 
 struct virtio_net_config {
-  /* The config defining mac address (if VIRTIO_NET_F_MAC) */
-  uint8_t mac[ETH_ALEN];
-  /* See VIRTIO_NET_F_STATUS and VIRTIO_NET_S_* above */
-  __virtio16 status;
-  /* Maximum number of each of transmit and receive queues;
-   * see VIRTIO_NET_F_MQ and VIRTIO_NET_CTRL_MQ.
-   * Legal values are between 1 and 0x8000
-   */
-  __virtio16 max_virtqueue_pairs;
-  /* Default maximum transmit unit advice */
-  __virtio16 mtu;
-  /*
-   * speed, in units of 1Mb. All values 0 to INT_MAX are legal.
-   * Any other value stands for unknown.
-   */
-  uint32_t speed;
-  /*
-   * 0x00 - half duplex
-   * 0x01 - full duplex
-   * Any other value stands for unknown.
-   */
-  uint8_t duplex;
-  /* maximum size of RSS key */
-  uint8_t rss_max_key_size;
-  /* maximum number of indirection table entries */
-  uint16_t rss_max_indirection_table_length;
-  /* bitmask of supported VIRTIO_NET_RSS_HASH_ types */
-  uint32_t supported_hash_types;
+	/* The config defining mac address (if VIRTIO_NET_F_MAC) */
+	uint8_t mac[ETH_ALEN];
+	/* See VIRTIO_NET_F_STATUS and VIRTIO_NET_S_* above */
+	__virtio16 status;
+	/* Maximum number of each of transmit and receive queues;
+	 * see VIRTIO_NET_F_MQ and VIRTIO_NET_CTRL_MQ.
+	 * Legal values are between 1 and 0x8000
+	 */
+	__virtio16 max_virtqueue_pairs;
+	/* Default maximum transmit unit advice */
+	__virtio16 mtu;
+	/*
+	 * speed, in units of 1Mb. All values 0 to INT_MAX are legal.
+	 * Any other value stands for unknown.
+	 */
+	uint32_t speed;
+	/*
+	 * 0x00 - half duplex
+	 * 0x01 - full duplex
+	 * Any other value stands for unknown.
+	 */
+	uint8_t duplex;
+	/* maximum size of RSS key */
+	uint8_t rss_max_key_size;
+	/* maximum number of indirection table entries */
+	uint16_t rss_max_indirection_table_length;
+	/* bitmask of supported VIRTIO_NET_RSS_HASH_ types */
+	uint32_t supported_hash_types;
 } QEMU_PACKED;
 
 /*
@@ -136,57 +127,57 @@ struct virtio_net_config {
  * only flattened.
  */
 struct virtio_net_hdr_v1 {
-#define VIRTIO_NET_HDR_F_NEEDS_CSUM 1 /* Use csum_start, csum_offset */
-#define VIRTIO_NET_HDR_F_DATA_VALID 2 /* Csum is valid */
-#define VIRTIO_NET_HDR_F_RSC_INFO 4   /* rsc info in csum_ fields */
-  uint8_t flags;
-#define VIRTIO_NET_HDR_GSO_NONE 0   /* Not a GSO frame */
-#define VIRTIO_NET_HDR_GSO_TCPV4 1  /* GSO frame, IPv4 TCP (TSO) */
-#define VIRTIO_NET_HDR_GSO_UDP 3    /* GSO frame, IPv4 UDP (UFO) */
-#define VIRTIO_NET_HDR_GSO_TCPV6 4  /* GSO frame, IPv6 TCP */
-#define VIRTIO_NET_HDR_GSO_UDP_L4 5 /* GSO frame, IPv4& IPv6 UDP (USO) */
-#define VIRTIO_NET_HDR_GSO_ECN 0x80 /* TCP has ECN set */
-  uint8_t gso_type;
-  __virtio16 hdr_len;  /* Ethernet + IP + tcp/udp hdrs */
-  __virtio16 gso_size; /* Bytes to append to hdr_len per frame */
-  union {
-    struct {
-      __virtio16 csum_start;
-      __virtio16 csum_offset;
-    };
-    /* Checksum calculation */
-    struct {
-      /* Position to start checksumming from */
-      __virtio16 start;
-      /* Offset after that to place checksum */
-      __virtio16 offset;
-    } csum;
-    /* Receive Segment Coalescing */
-    struct {
-      /* Number of coalesced segments */
-      uint16_t segments;
-      /* Number of duplicated acks */
-      uint16_t dup_acks;
-    } rsc;
-  };
-  __virtio16 num_buffers; /* Number of merged rx buffers */
+#define VIRTIO_NET_HDR_F_NEEDS_CSUM	1	/* Use csum_start, csum_offset */
+#define VIRTIO_NET_HDR_F_DATA_VALID	2	/* Csum is valid */
+#define VIRTIO_NET_HDR_F_RSC_INFO	4	/* rsc info in csum_ fields */
+	uint8_t flags;
+#define VIRTIO_NET_HDR_GSO_NONE		0	/* Not a GSO frame */
+#define VIRTIO_NET_HDR_GSO_TCPV4	1	/* GSO frame, IPv4 TCP (TSO) */
+#define VIRTIO_NET_HDR_GSO_UDP		3	/* GSO frame, IPv4 UDP (UFO) */
+#define VIRTIO_NET_HDR_GSO_TCPV6	4	/* GSO frame, IPv6 TCP */
+#define VIRTIO_NET_HDR_GSO_UDP_L4	5	/* GSO frame, IPv4& IPv6 UDP (USO) */
+#define VIRTIO_NET_HDR_GSO_ECN		0x80	/* TCP has ECN set */
+	uint8_t gso_type;
+	__virtio16 hdr_len;	/* Ethernet + IP + tcp/udp hdrs */
+	__virtio16 gso_size;	/* Bytes to append to hdr_len per frame */
+	union {
+		struct {
+			__virtio16 csum_start;
+			__virtio16 csum_offset;
+		};
+		/* Checksum calculation */
+		struct {
+			/* Position to start checksumming from */
+			__virtio16 start;
+			/* Offset after that to place checksum */
+			__virtio16 offset;
+		} csum;
+		/* Receive Segment Coalescing */
+		struct {
+			/* Number of coalesced segments */
+			uint16_t segments;
+			/* Number of duplicated acks */
+			uint16_t dup_acks;
+		} rsc;
+	};
+	__virtio16 num_buffers;	/* Number of merged rx buffers */
 };
 
 struct virtio_net_hdr_v1_hash {
-  struct virtio_net_hdr_v1 hdr;
-  uint32_t hash_value;
-#define VIRTIO_NET_HASH_REPORT_NONE 0
-#define VIRTIO_NET_HASH_REPORT_IPv4 1
-#define VIRTIO_NET_HASH_REPORT_TCPv4 2
-#define VIRTIO_NET_HASH_REPORT_UDPv4 3
-#define VIRTIO_NET_HASH_REPORT_IPv6 4
-#define VIRTIO_NET_HASH_REPORT_TCPv6 5
-#define VIRTIO_NET_HASH_REPORT_UDPv6 6
-#define VIRTIO_NET_HASH_REPORT_IPv6_EX 7
-#define VIRTIO_NET_HASH_REPORT_TCPv6_EX 8
-#define VIRTIO_NET_HASH_REPORT_UDPv6_EX 9
-  uint16_t hash_report;
-  uint16_t padding;
+	struct virtio_net_hdr_v1 hdr;
+	uint32_t hash_value;
+#define VIRTIO_NET_HASH_REPORT_NONE            0
+#define VIRTIO_NET_HASH_REPORT_IPv4            1
+#define VIRTIO_NET_HASH_REPORT_TCPv4           2
+#define VIRTIO_NET_HASH_REPORT_UDPv4           3
+#define VIRTIO_NET_HASH_REPORT_IPv6            4
+#define VIRTIO_NET_HASH_REPORT_TCPv6           5
+#define VIRTIO_NET_HASH_REPORT_UDPv6           6
+#define VIRTIO_NET_HASH_REPORT_IPv6_EX         7
+#define VIRTIO_NET_HASH_REPORT_TCPv6_EX        8
+#define VIRTIO_NET_HASH_REPORT_UDPv6_EX        9
+	uint16_t hash_report;
+	uint16_t padding;
 };
 
 #ifndef VIRTIO_NET_NO_LEGACY
@@ -195,21 +186,21 @@ struct virtio_net_hdr_v1_hash {
  * be the first element of the scatter-gather list.  If you don't
  * specify GSO or CSUM features, you can simply ignore the header. */
 struct virtio_net_hdr {
-  /* See VIRTIO_NET_HDR_F_* */
-  uint8_t flags;
-  /* See VIRTIO_NET_HDR_GSO_* */
-  uint8_t gso_type;
-  __virtio16 hdr_len;     /* Ethernet + IP + tcp/udp hdrs */
-  __virtio16 gso_size;    /* Bytes to append to hdr_len per frame */
-  __virtio16 csum_start;  /* Position to start checksumming from */
-  __virtio16 csum_offset; /* Offset after that to place checksum */
+	/* See VIRTIO_NET_HDR_F_* */
+	uint8_t flags;
+	/* See VIRTIO_NET_HDR_GSO_* */
+	uint8_t gso_type;
+	__virtio16 hdr_len;		/* Ethernet + IP + tcp/udp hdrs */
+	__virtio16 gso_size;		/* Bytes to append to hdr_len per frame */
+	__virtio16 csum_start;	/* Position to start checksumming from */
+	__virtio16 csum_offset;	/* Offset after that to place checksum */
 };
 
 /* This is the version of the header to use when the MRG_RXBUF
  * feature has been negotiated. */
 struct virtio_net_hdr_mrg_rxbuf {
-  struct virtio_net_hdr hdr;
-  __virtio16 num_buffers; /* Number of merged rx buffers */
+	struct virtio_net_hdr hdr;
+	__virtio16 num_buffers;	/* Number of merged rx buffers */
 };
 #endif /* ...VIRTIO_NET_NO_LEGACY */
 
@@ -221,14 +212,14 @@ struct virtio_net_hdr_mrg_rxbuf {
  * command goes in between.
  */
 struct virtio_net_ctrl_hdr {
-  uint8_t class;
-  uint8_t cmd;
+	uint8_t class;
+	uint8_t cmd;
 } QEMU_PACKED;
 
 typedef uint8_t virtio_net_ctrl_ack;
 
-#define VIRTIO_NET_OK 0
-#define VIRTIO_NET_ERR 1
+#define VIRTIO_NET_OK     0
+#define VIRTIO_NET_ERR    1
 
 /*
  * Control the RX mode, ie. promisucous, allmulti, etc...
@@ -237,13 +228,13 @@ typedef uint8_t virtio_net_ctrl_ack;
  * 0 and 1 are supported with the VIRTIO_NET_F_CTRL_RX feature.
  * Commands 2-5 are added with VIRTIO_NET_F_CTRL_RX_EXTRA.
  */
-#define VIRTIO_NET_CTRL_RX 0
-#define VIRTIO_NET_CTRL_RX_PROMISC 0
-#define VIRTIO_NET_CTRL_RX_ALLMULTI 1
-#define VIRTIO_NET_CTRL_RX_ALLUNI 2
-#define VIRTIO_NET_CTRL_RX_NOMULTI 3
-#define VIRTIO_NET_CTRL_RX_NOUNI 4
-#define VIRTIO_NET_CTRL_RX_NOBCAST 5
+#define VIRTIO_NET_CTRL_RX    0
+ #define VIRTIO_NET_CTRL_RX_PROMISC      0
+ #define VIRTIO_NET_CTRL_RX_ALLMULTI     1
+ #define VIRTIO_NET_CTRL_RX_ALLUNI       2
+ #define VIRTIO_NET_CTRL_RX_NOMULTI      3
+ #define VIRTIO_NET_CTRL_RX_NOUNI        4
+ #define VIRTIO_NET_CTRL_RX_NOBCAST      5
 
 /*
  * Control the MAC
@@ -265,13 +256,13 @@ typedef uint8_t virtio_net_ctrl_ack;
  * VIRTIO_NET_F_CTRL_MAC_ADDR feature is available.
  */
 struct virtio_net_ctrl_mac {
-  __virtio32 entries;
-  uint8_t macs[][ETH_ALEN];
+	__virtio32 entries;
+	uint8_t macs[][ETH_ALEN];
 } QEMU_PACKED;
 
-#define VIRTIO_NET_CTRL_MAC 1
-#define VIRTIO_NET_CTRL_MAC_TABLE_SET 0
-#define VIRTIO_NET_CTRL_MAC_ADDR_SET 1
+#define VIRTIO_NET_CTRL_MAC    1
+ #define VIRTIO_NET_CTRL_MAC_TABLE_SET        0
+ #define VIRTIO_NET_CTRL_MAC_ADDR_SET         1
 
 /*
  * Control VLAN filtering
@@ -282,9 +273,9 @@ struct virtio_net_ctrl_mac {
  * byte VLAN ID.  VLAN filterting is available with the
  * VIRTIO_NET_F_CTRL_VLAN feature bit.
  */
-#define VIRTIO_NET_CTRL_VLAN 2
-#define VIRTIO_NET_CTRL_VLAN_ADD 0
-#define VIRTIO_NET_CTRL_VLAN_DEL 1
+#define VIRTIO_NET_CTRL_VLAN       2
+ #define VIRTIO_NET_CTRL_VLAN_ADD             0
+ #define VIRTIO_NET_CTRL_VLAN_DEL             1
 
 /*
  * Control link announce acknowledgement
@@ -294,13 +285,13 @@ struct virtio_net_ctrl_mac {
  * VIRTIO_NET_S_ANNOUNCE bit in the status field after it receives
  * this command.
  */
-#define VIRTIO_NET_CTRL_ANNOUNCE 3
-#define VIRTIO_NET_CTRL_ANNOUNCE_ACK 0
+#define VIRTIO_NET_CTRL_ANNOUNCE       3
+ #define VIRTIO_NET_CTRL_ANNOUNCE_ACK         0
 
 /*
  * Control Receive Flow Steering
  */
-#define VIRTIO_NET_CTRL_MQ 4
+#define VIRTIO_NET_CTRL_MQ   4
 /*
  * The command VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET
  * enables Receive Flow Steering, specifying the number of the transmit and
@@ -311,12 +302,12 @@ struct virtio_net_ctrl_mac {
  * specified.
  */
 struct virtio_net_ctrl_mq {
-  __virtio16 virtqueue_pairs;
+	__virtio16 virtqueue_pairs;
 };
 
-#define VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET 0
-#define VIRTIO_NET_CTRL_MQ_VQ_PAIRS_MIN 1
-#define VIRTIO_NET_CTRL_MQ_VQ_PAIRS_MAX 0x8000
+ #define VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET        0
+ #define VIRTIO_NET_CTRL_MQ_VQ_PAIRS_MIN        1
+ #define VIRTIO_NET_CTRL_MQ_VQ_PAIRS_MAX        0x8000
 
 /*
  * The command VIRTIO_NET_CTRL_MQ_RSS_CONFIG has the same effect as
@@ -326,16 +317,16 @@ struct virtio_net_ctrl_mq {
  * also provides parameters to calculate a hash and receive virtqueue.
  */
 struct virtio_net_rss_config {
-  uint32_t hash_types;
-  uint16_t indirection_table_mask;
-  uint16_t unclassified_queue;
-  uint16_t indirection_table[1 /* + indirection_table_mask */];
-  uint16_t max_tx_vq;
-  uint8_t hash_key_length;
-  uint8_t hash_key_data[/* hash_key_length */];
+	uint32_t hash_types;
+	uint16_t indirection_table_mask;
+	uint16_t unclassified_queue;
+	uint16_t indirection_table[1/* + indirection_table_mask */];
+	uint16_t max_tx_vq;
+	uint8_t hash_key_length;
+	uint8_t hash_key_data[/* hash_key_length */];
 };
 
-#define VIRTIO_NET_CTRL_MQ_RSS_CONFIG 1
+ #define VIRTIO_NET_CTRL_MQ_RSS_CONFIG          1
 
 /*
  * The command VIRTIO_NET_CTRL_MQ_HASH_CONFIG requests the device
@@ -346,14 +337,14 @@ struct virtio_net_rss_config {
  * layout of virtio header as defined in virtio_net_hdr_v1_hash.
  */
 struct virtio_net_hash_config {
-  uint32_t hash_types;
-  /* for compatibility with virtio_net_rss_config */
-  uint16_t reserved[4];
-  uint8_t hash_key_length;
-  uint8_t hash_key_data[/* hash_key_length */];
+	uint32_t hash_types;
+	/* for compatibility with virtio_net_rss_config */
+	uint16_t reserved[4];
+	uint8_t hash_key_length;
+	uint8_t hash_key_data[/* hash_key_length */];
 };
 
-#define VIRTIO_NET_CTRL_MQ_HASH_CONFIG 2
+ #define VIRTIO_NET_CTRL_MQ_HASH_CONFIG         2
 
 /*
  * Control network offloads
@@ -367,8 +358,8 @@ struct virtio_net_hash_config {
  * See VIRTIO_NET_F_GUEST_* for the list of offloads
  * that can be enabled/disabled.
  */
-#define VIRTIO_NET_CTRL_GUEST_OFFLOADS 5
-#define VIRTIO_NET_CTRL_GUEST_OFFLOADS_SET 0
+#define VIRTIO_NET_CTRL_GUEST_OFFLOADS   5
+#define VIRTIO_NET_CTRL_GUEST_OFFLOADS_SET        0
 
 /*
  * Control notifications coalescing.
@@ -377,42 +368,42 @@ struct virtio_net_hash_config {
  *
  * Available with the VIRTIO_NET_F_NOTF_COAL feature bit.
  */
-#define VIRTIO_NET_CTRL_NOTF_COAL 6
+#define VIRTIO_NET_CTRL_NOTF_COAL		6
 /*
  * Set the tx-usecs/tx-max-packets parameters.
  */
 struct virtio_net_ctrl_coal_tx {
-  /* Maximum number of packets to send before a TX notification */
-  uint32_t tx_max_packets;
-  /* Maximum number of usecs to delay a TX notification */
-  uint32_t tx_usecs;
+	/* Maximum number of packets to send before a TX notification */
+	uint32_t tx_max_packets;
+	/* Maximum number of usecs to delay a TX notification */
+	uint32_t tx_usecs;
 };
 
-#define VIRTIO_NET_CTRL_NOTF_COAL_TX_SET 0
+#define VIRTIO_NET_CTRL_NOTF_COAL_TX_SET		0
 
 /*
  * Set the rx-usecs/rx-max-packets parameters.
  */
 struct virtio_net_ctrl_coal_rx {
-  /* Maximum number of packets to receive before a RX notification */
-  uint32_t rx_max_packets;
-  /* Maximum number of usecs to delay a RX notification */
-  uint32_t rx_usecs;
+	/* Maximum number of packets to receive before a RX notification */
+	uint32_t rx_max_packets;
+	/* Maximum number of usecs to delay a RX notification */
+	uint32_t rx_usecs;
 };
 
-#define VIRTIO_NET_CTRL_NOTF_COAL_RX_SET 1
-#define VIRTIO_NET_CTRL_NOTF_COAL_VQ_SET 2
-#define VIRTIO_NET_CTRL_NOTF_COAL_VQ_GET 3
+#define VIRTIO_NET_CTRL_NOTF_COAL_RX_SET		1
+#define VIRTIO_NET_CTRL_NOTF_COAL_VQ_SET		2
+#define VIRTIO_NET_CTRL_NOTF_COAL_VQ_GET		3
 
 struct virtio_net_ctrl_coal {
-  uint32_t max_packets;
-  uint32_t max_usecs;
+	uint32_t max_packets;
+	uint32_t max_usecs;
 };
 
-struct virtio_net_ctrl_coal_vq {
-  uint16_t vqn;
-  uint16_t reserved;
-  struct virtio_net_ctrl_coal coal;
+struct  virtio_net_ctrl_coal_vq {
+	uint16_t vqn;
+	uint16_t reserved;
+	struct virtio_net_ctrl_coal coal;
 };
 
 #endif /* _LINUX_VIRTIO_NET_H */

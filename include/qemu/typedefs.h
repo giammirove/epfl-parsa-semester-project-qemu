@@ -1,6 +1,7 @@
 #ifndef QEMU_TYPEDEFS_H
 #define QEMU_TYPEDEFS_H
-#include <bits/pthreadtypes.h>
+#include <pthread.h>
+#include <inttypes.h>
 #include <bits/stdint-uintn.h>
 
 /*
@@ -161,29 +162,36 @@ typedef void (*qemu_irq_handler)(void *opaque, int n, int level);
  */
 enum { ST_F = 0, ST_N = 1, ST_B = 2 };
 struct QflexPluginState {
-  int64_t n_nodes;         /* number of nodes in the simulation */
-  int64_t can_count;       /* decide whether the synchronization can be done */
-  int64_t idle_cpus;       /* number of cpus in idle */
-  int64_t pkt_sent;        /* number of packet sent in the current quanta */
-  int64_t pkt_received;    /* number of packet received (not delivered) in
-                               the current quanta */
+  int n_nodes;      /* number of nodes in the simulation */
+  int can_count;    /* decide whether the synchronization can be done */
+  int idle_cpus;    /* number of cpus in idle */
+  int pkt_sent;     /* number of packet sent in the current quanta */
+  int pkt_received; /* number of packet received (not delivered) in
+                            the current quanta */
+  int is_delivering;
   void *pkt_list_received; /* GList * of QflexPacket - list of packet received
                               in the current quanta */
   void *pkt_list_send; /* GList * of QflexIOV - list of packet to send at the
                           beginning of the next quanta (NOT used at the moment,
                           but could be part of an optimization) */
   int64_t
-      offset_time; /* "qemu" virtual clock before qflex simulation started */
+      offset_time; /* real time spent for synchronization */
+  int64_t frozen_time; /* last real tile recorder before synchronization */
 
-  _Atomic int64_t stop;  /* decide whether you can send a network packet and
+  int stop;  /* decide whether you can send a network packet and
                             threads can run */
-  _Atomic int64_t clock; /* new virtual time */
+  int64_t clock; /* new virtual time */
 
-  /* locks for synchronization: pthread_mutex_t */
+  int synchro; /* synchronize (1) or not synchronize (0) */
+  int snap; 
+
   pthread_mutex_t lock1;
+  pthread_cond_t cond1;
   pthread_mutex_t lock2;
   pthread_mutex_t lock3;
   pthread_mutex_t *locks; /* in case you need an array of them */
+
+
 
   /* local struct (to access only from the plugin) */
   void *lstate;
@@ -192,7 +200,7 @@ struct QflexPluginState {
 
   int64_t (*get_clock)(
       void *); /* hook to the plugin to return the current clock */
-  int64_t (*get_icount)(
+  int (*get_icount)(
       void *); /* hook to the plugin to return the current instruction count */
   int (*vm_pause)(void *);   /* pause the virtual clock */
   int (*vm_unpause)(void *); /* unpause the virtual clock */
@@ -203,7 +211,7 @@ struct QflexPluginState {
       void); /* send all packets not sent because in reduction phase */
   int (*send_boot)(void); /* signal the central server that we are to join the
                              multinode simulation */
-  int64_t (*can_send)(void *); /* decide whether the we can send out packekts
+  int (*can_send)(void *); /* decide whether the we can send out packekts
                                 (in reduction phase we can not) */
 };
 

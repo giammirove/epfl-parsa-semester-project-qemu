@@ -3093,6 +3093,7 @@ bool save_snapshot(const char *name, bool overwrite, const char *vmstate,
 
     global_state_store();
     vm_stop(RUN_STATE_SAVE_VM);
+    printf("SAVE VM\n");
 
     bdrv_drain_all_begin();
 
@@ -3114,6 +3115,7 @@ bool save_snapshot(const char *name, bool overwrite, const char *vmstate,
         g_autofree char *autoname = g_date_time_format(now,  "vm-%Y%m%d%H%M%S");
         pstrcpy(sn->name, sizeof(sn->name), autoname);
     }
+
 
     /* save the VM state */
     f = qemu_fopen_bdrv(bs, 1);
@@ -3407,8 +3409,10 @@ static void snapshot_save_job_bh(void *opaque)
     SnapshotJob *s = container_of(job, SnapshotJob, common);
 
     job_progress_set_remaining(&s->common, 1);
-    s->ret = save_snapshot(s->tag, false, s->vmstate,
-                           true, s->devices, s->errp);
+    printf("%p %d %p\n", s->vmstate, s->devices != NULL, s->devices);
+    s->ret = save_snapshot(s->tag, true, s->vmstate,
+                           s->devices != NULL, s->devices, s->errp);
+    printf("DONE\n");
     job_progress_update(&s->common, 1);
 
     qmp_snapshot_job_free(s);
@@ -3499,6 +3503,26 @@ void qmp_snapshot_save(const char *job_id,
     s->tag = g_strdup(tag);
     s->vmstate = g_strdup(vmstate);
     s->devices = QAPI_CLONE(strList, devices);
+
+    job_start(&s->common);
+}
+
+void qmp_snapshot_save_qflex(const char *job_id,
+                       const char *tag,
+                       Error **errp)
+{
+    SnapshotJob *s;
+
+    s = job_create(job_id, &snapshot_save_job_driver, NULL,
+                   qemu_get_aio_context(), JOB_MANUAL_DISMISS,
+                   NULL, NULL, errp);
+    if (!s) {
+        return;
+    }
+
+    s->tag = g_strdup(tag);
+    s->vmstate = NULL;
+    s->devices = NULL;
 
     job_start(&s->common);
 }

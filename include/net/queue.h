@@ -77,6 +77,7 @@ ssize_t qemu_net_queue_send_iov(NetQueue *queue,
                                 int iovcnt,
                                 NetPacketSent *sent_cb);
 
+uint32_t qemu_net_queue_get_nq_count(NetQueue *queue);
 void qemu_net_queue_purge(NetQueue *queue, NetClientState *from);
 bool qemu_net_queue_flush(NetQueue *queue);
 

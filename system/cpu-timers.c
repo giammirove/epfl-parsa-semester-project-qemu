@@ -78,7 +78,7 @@ int64_t cpu_get_clock_locked(void)
 #ifdef CONFIG_PLUGIN
   CPUState *cpu = first_cpu;
   bool qflex = false;
-  qflex = cpu != NULL && cpu->qflex_state != NULL;
+  qflex = cpu != NULL && cpu->qflex_state != NULL && cpu->qflex_state->synchro == 1 && cpu->qflex_state->snap == 0;
   if (qflex && cpu->qflex_state->can_count > 0) {
     return cpu->qflex_state->get_clock(cpu->qflex_state);
   }

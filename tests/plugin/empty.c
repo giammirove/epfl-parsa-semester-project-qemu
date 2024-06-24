@@ -4,6 +4,7 @@
  * License: GNU GPL, version 2 or later.
  *   See the COPYING file in the top-level directory.
  */
+#include "typedefs.h"
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -18,29 +19,11 @@
 QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 static uint64_t counter = 0;
 static uint64_t counters[NCPU];
-static bool ackread[NCPU];
-static bool stop[NCPU];
-static _Atomic bool stopall;
-pthread_mutex_t counter_lock = PTHREAD_MUTEX_INITIALIZER;
-static struct qemu_plugin_scoreboard *counts;
-static qemu_plugin_u64 qcounter;
-
-static uint64_t QUANTA = 10000;
-static uint64_t next = 10000;
-
-typedef struct {
-  uint64_t qcounter;
-} CPUCount;
+QflexPluginState *qflex_state;
 
 static void vcpu_insn_exec_before_no_plug(unsigned int cpu_index, void *udata)
 {
-  // while (stop[cpu_index]) {
-  while (stopall) {
-    usleep(1);
-  }
-  ackread[cpu_index] = 0;
   counters[cpu_index]++;
-  // counter++;
 }
 static void vcpu_tb_trans_no_plug(qemu_plugin_id_t id,
                                   struct qemu_plugin_tb *tb)
@@ -88,51 +71,58 @@ static void *timer(void *args)
   fclose(ptr);
   return NULL;
 }
-static void *check(void *args)
-{
-  uint64_t curr = 0;
-  uint64_t max = 0;
-  for (;;) {
-    usleep(1);
-    curr = 0;
-    for (volatile int i = 0; i < NCPU; i++) {
-      curr += counters[i];
-    }
-    if (curr >= next) {
-      if (curr - next > max) {
-        max = curr - next;
-        printf("QUANTA %ld\n", max);
-      }
-      // for (volatile int i = 0; i < NCPU; i++) {
-      //   stop[i] = true;
-      // }
-      stopall = true;
-      next += QUANTA;
-      stopall = false;
-      // while (true) {
-      //   sleep(1);
-      // }
-      // sleep(1);
-    }
-  }
-  return NULL;
-}
 
 QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
                                            const qemu_info_t *info, int argc,
                                            char **argv)
 {
+  qflex_state = malloc(sizeof(QflexPluginState));
+  qflex_state->pkt_sent = 0;
+  qflex_state->pkt_received = 0;
+  qflex_state->pkt_receive = NULL;
+  qflex_state->pkt_list_received = g_list_alloc();
+  qflex_state->pkt_list_send = g_list_alloc();
+  /* should be 0 at the beginning */
+  qflex_state->n_nodes = 2;
+  qflex_state->can_count = 0;
+  qflex_state->stop = ST_F;
+  qflex_state->clock = 0;
+  qflex_state->idle_cpus = 0;
+  qflex_state->offset_time = 0;
+  // qflex_state->pkt_notify = qflex_notify_packet;
+  // qflex_state->get_clock = qflex_get_clock;
+  // qflex_state->get_icount = qflex_get_icount;
+  // qflex_state->send_boot = qflex_send_boot;
+  // qflex_state->can_send = qflex_can_send;
+
+  // qflex_state->lstate = qflex_lstate;
+  pthread_mutexattr_t attr, attr_thread;
+  pthread_mutexattr_init(&attr);
+  pthread_mutexattr_init(&attr_thread);
+  pthread_condattr_t attr_cond, attr_cond_thread;
+  pthread_condattr_init(&attr_cond);
+  pthread_condattr_init(&attr_cond_thread);
+
+  // pthread_mutex_init(&qflex_lstate->idle_lock, &attr);
+  // pthread_mutex_init(&qflex_lstate->barrier_lock, &attr);
+  // pthread_cond_init(&qflex_lstate->barrier_cond, &attr_cond);
+
+  /* so that a thread can lock a mutex multiple times (i.e. tap receive with a
+   * retry could) */
+  // pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+  pthread_mutex_init(&qflex_state->lock1, &attr);
+  pthread_mutex_init(&qflex_state->lock2, &attr);
+  pthread_mutex_init(&qflex_state->lock3, &attr);
+
+  pthread_cond_init(&qflex_state->cond1, &attr_cond);
+
   for (int i = 0; i < NCPU; i++) {
     counters[i] = 0;
-    stop[i] = false;
   }
-  counts = qemu_plugin_scoreboard_new(sizeof(CPUCount));
-  qcounter = qemu_plugin_scoreboard_u64_in_struct(counts, CPUCount, qcounter);
   qemu_plugin_register_vcpu_tb_trans_cb(id, vcpu_tb_trans_no_plug);
   (void)vcpu_tb_trans_no_plug;
-  pthread_t t1, t2;
+  pthread_t t1;
   pthread_create(&t1, NULL, timer, &counter);
-  pthread_create(&t2, NULL, check, &counter);
   (void)vcpu_tb_trans_no_plug;
   return 0;
 }
